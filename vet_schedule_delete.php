@@ -7,17 +7,21 @@ if (!isset($_SESSION['vet_id'])) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id'])) {
-    $termin_id = (int)$_POST['id'];
-
-    $termin = get_schedule_by_id($pdo, $termin_id);
-    if (!$termin || $termin['veterinarian_id'] != $_SESSION['vet_id']) {
-        die("Nevažeći zahtev.");
-    }
-
-    delete_schedule($pdo, $termin_id);
-    header("Location: vet_profile.php");
-    exit;
-} else {
-    die("Nevažeći pristup.");
+if (!isset($_POST['id'])) {
+    die("Nije prosleđen ID termina za brisanje.");
 }
+
+$id = $_POST['id'];
+$vetId = $_SESSION['vet_id'];
+
+try {
+    $stmt = $pdo->prepare("DELETE FROM veterinarian_schedule WHERE id = :id AND veterinarian_id = :vetId");
+    $stmt->execute(['id' => $id, 'vetId' => $vetId]);
+
+    $_SESSION['msg'] = "Termin uspešno obrisan.";
+    header("Location: vet_schedule.php");
+    exit;
+} catch (PDOException $e) {
+    die("Greška prilikom brisanja termina: " . $e->getMessage());
+}
+?>

@@ -53,6 +53,5 @@ if (isset($_GET['token'])) {
         </div>
     </div>
 </div>
-
 </body>
 </html>

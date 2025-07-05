@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once 'functions.php';
+require_once 'db.php';
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
@@ -9,47 +10,117 @@ if (!isset($_SESSION['vet_id'])) {
 
 $vet_id = $_SESSION['vet_id'];
 $record_id = (int)($_GET['id'] ?? 0);
+$appointment_id = (int)($_GET['appointment_id'] ?? 0);
 
-// Učitavanje stare beleške
-$stmt = $pdo->prepare("SELECT * FROM medical_records WHERE id = ? AND veterinarian_id = ?");
-$stmt->execute([$record_id, $vet_id]);
-$record = $stmt->fetch(PDO::FETCH_ASSOC);
+$treatments = get_all_treatments($pdo);
 
+$record = get_medical_record_by_id($pdo, $record_id, $vet_id);
 if (!$record) {
-    die("Nemate pravo pristupa ovoj belešci.");
+    die("Nemate pravo pristupa ovoj belešci ili ne postoji.");
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $diagnosis = trim($_POST['diagnosis']);
-    $treatment = trim($_POST['treatment']);
-    $price = floatval($_POST['price']);
+    $treatment_id = (int)$_POST['treatment_id'];
 
-    $stmt = $pdo->prepare("UPDATE medical_records SET diagnosis = ?, treatment = ?, price = ? WHERE id = ? AND veterinarian_id = ?");
-    $stmt->execute([$diagnosis, $treatment, $price, $record_id, $vet_id]);
+    $selected_treatment = get_service_by_id($pdo, $treatment_id);
+    if ($diagnosis && $selected_treatment) {
+        update_medical_note(
+            $pdo,
+            $record_id,
+            $diagnosis,
+            $selected_treatment['name'],
+            (float)$selected_treatment['price']
+        );
 
-    header("Location: vet_treatments_details.php?appointment_id=" . $record['appointment_id']);
-    exit;
+        header("Location: vet_treatments_details.php?appointment_id=$appointment_id");
+        exit;
+    }
 }
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="sr">
 <head>
-    <title>Izmena beleške</title>
+    <meta charset="UTF-8">
+    <title>Izmeni belešku</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #eefbf1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .edit-container {
+            width: 100%;
+            max-width: 600px;
+            padding: 30px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            text-align: center;
+            color: #4caf50;
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+
+        textarea, select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4caf50;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
 </head>
 <body>
-<h2>Izmeni belešku</h2>
-<form method="post">
-    <label>Dijagnoza:</label><br>
-    <textarea name="diagnosis" rows="3" required><?= htmlspecialchars($record['diagnosis']) ?></textarea><br>
+<div class="edit-container">
+    <h2>Izmeni belešku</h2>
+    <form method="post">
+        <label for="diagnosis">Dijagnoza:</label>
+        <textarea name="diagnosis" id="diagnosis" rows="3" required><?= htmlspecialchars($record['diagnosis']) ?></textarea>
 
-    <label>Tretman:</label><br>
-    <textarea name="treatment" rows="3" required><?= htmlspecialchars($record['treatment']) ?></textarea><br>
+        <label for="treatment_id">Tretman:</label>
+        <select name="treatment_id" id="treatment_id" required>
+            <option value="">-- Izaberite tretman --</option>
+            <?php foreach ($treatments as $t): ?>
+                <option value="<?= $t['id'] ?>" <?= $t['name'] == $record['treatment'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($t['name']) ?> (<?= number_format($t['price'], 2) ?> RSD)
+                </option>
+            <?php endforeach; ?>
+        </select>
 
-    <label>Cena (RSD):</label><br>
-    <input type="number" name="price" step="0.01" value="<?= htmlspecialchars($record['price']) ?>" required><br><br>
-
-    <button type="submit">Sačuvaj izmene</button>
-</form>
+        <button type="submit">Sačuvaj izmene</button>
+    </form>
+</div>
 </body>
 </html>

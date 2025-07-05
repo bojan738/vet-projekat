@@ -1,5 +1,7 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireRegularUser();
 require_once 'db.php';
 require_once 'functions.php';
 
@@ -25,12 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Profil korisnika</title>
     <link rel="stylesheet" href="css/css.css">
 </head>
-<body>
+<body class="login-page">
+
 <header>
     <div class="logo">🐾 PetCare</div>
     <nav>
@@ -45,29 +48,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </nav>
 </header>
 
-<h2>Podaci o korisniku</h2>
+<main>
+    <section class="form-section">
+        <h2 class="form-title">Podaci o korisniku</h2>
 
-<?php if ($success_message): ?>
-    <script>alert("<?= $success_message ?>");</script>
-<?php endif; ?>
+        <?php if ($success_message): ?>
+            <script>alert("<?= $success_message ?>");</script>
+        <?php endif; ?>
 
-<form method="POST">
-    <label for="first_name">Ime:</label><br>
-    <input type="text" id="first_name" name="first_name" value="<?= htmlspecialchars($user['first_name']) ?>"><br><br>
+        <form method="POST">
+            <div class="form-group">
+                <label for="first_name" class="form-label">Ime:</label>
+                <input type="text" id="first_name" name="first_name" value="<?= htmlspecialchars($user['first_name']) ?>" class="form-input">
+            </div>
 
-    <label for="last_name">Prezime:</label><br>
-    <input type="text" id="last_name" name="last_name" value="<?= htmlspecialchars($user['last_name']) ?>"><br><br>
+            <div class="form-group">
+                <label for="last_name" class="form-label">Prezime:</label>
+                <input type="text" id="last_name" name="last_name" value="<?= htmlspecialchars($user['last_name']) ?>" class="form-input">
+            </div>
 
-    <label for="email">Email:</label><br>
-    <input type="email" id="email" name="email" value="<?= htmlspecialchars($user['email']) ?>"><br><br>
+            <div class="form-group">
+                <label for="email" class="form-label">Email:</label>
+                <input type="email" id="email" name="email" value="<?= htmlspecialchars($user['email']) ?>" class="form-input">
+            </div>
 
-    <a href="password_reset.php">Promeni lozinku</a><br><br>
+            <p class="register-link"><a href="password_reset.php">Promeni lozinku</a></p>
 
-    <label for="phone">Broj telefona:</label><br>
-    <input type="tel" id="phone" name="phone" value="<?= htmlspecialchars($user['phone_number']) ?>"><br><br>
+            <div class="form-group">
+                <label for="phone" class="form-label">Broj telefona:</label>
+                <input type="tel" id="phone" name="phone" value="<?= htmlspecialchars($user['phone_number']) ?>" class="form-input">
+            </div>
 
-    <button type="submit">Izmeni</button>
-</form>
+            <button type="submit" class="cta-button">Izmeni</button>
+        </form>
+    </section>
+</main>
 
 </body>
+<footer class="custom-footer">
+    <div class="footer-content">
+        &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
+    </div>
+</footer>
 </html>

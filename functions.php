@@ -26,11 +26,6 @@ if (!function_exists('safeRedirect')) {
     }
 }
 
-// -------------------- Veterinari ----------------------- //
-
-/**
- * Vrati listu svih veterinara sa povezanim korisničkim podacima.
- */
 
 
 // -------------------- Raspored & slobodni slotovi ----- //
@@ -156,10 +151,22 @@ function delete_user($pdo, $id) {
     $stmt->execute([$id]);
 }
 // VETERINARI
-function get_all_veterinarians($pdo) {
-    $stmt = $pdo->query("SELECT v.id, u.id AS user_id, u.first_name, u.last_name, u.email, u.phone_number, u.address, v.specialization, v.license_number FROM veterinarians v JOIN users u ON v.user_id = u.id");
-    return $stmt->fetchAll();
+function get_all_veterinarians(PDO $pdo): array {
+    $stmt = $pdo->query("
+        SELECT 
+            v.id,
+            v.specialization,
+            v.photo,
+            u.first_name,
+            u.last_name,
+            u.email
+        FROM veterinarians v
+        INNER JOIN users u ON v.user_id = u.id
+    ");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+
 
 function get_veterinarian_by_id($pdo, $id) {
     $stmt = $pdo->prepare("SELECT v.*, u.id AS user_id, u.first_name, u.last_name, u.email, u.phone_number, u.address FROM veterinarians v JOIN users u ON v.user_id = u.id WHERE v.id = ?");
@@ -295,20 +302,180 @@ function delete_medical_record($pdo, $id) {
 
 
 
-
-
 //USERS DEOOOO
+
+//user_reservation
+function get_available_terms_by_vet_and_date(PDO $pdo, int $vet_id, string $date): array {
+    // Dobavi termine veterinara za dan u sedmici
+    $dayOfWeekMap = [
+        'Monday' => 'Ponedeljak',
+        'Tuesday' => 'Utorak',
+        'Wednesday' => 'Sreda',
+        'Thursday' => 'Cetvrtak',
+        'Friday' => 'Petak',
+        'Saturday' => 'Subota',
+        'Sunday' => 'Nedelja'
+    ];
+    $phpDay = date('l', strtotime($date)); // npr. Monday
+    $dbDay = $dayOfWeekMap[$phpDay] ?? null;
+    if (!$dbDay) return [];
+
+    // Izbaci termine koji su već zauzeti u tabeli appointments za isti datum i veterinara
+    $stmt = $pdo->prepare("
+        SELECT vs.id AS schedule_id, vs.start_time, vs.end_time, vs.day_of_week,
+               u.first_name, u.last_name
+        FROM veterinarian_schedule vs
+        JOIN veterinarians v ON vs.veterinarian_id = v.id
+        JOIN users u ON v.user_id = u.id
+        WHERE vs.veterinarian_id = :vet_id
+          AND vs.day_of_week = :day_of_week
+          AND NOT EXISTS (
+            SELECT 1 FROM appointments a
+            WHERE a.schedule_id = vs.id
+              AND a.appointment_date = :date
+              AND a.status = 'scheduled'
+          )
+        ORDER BY vs.start_time
+    ");
+    $stmt->execute([
+        ':vet_id' => $vet_id,
+        ':day_of_week' => $dbDay,
+        ':date' => $date
+    ]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+function is_schedule_slot_taken(PDO $pdo, int $schedule_id, string $date): bool {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM appointments WHERE schedule_id = :schedule_id AND appointment_date = :date AND status = 'scheduled'");
+    $stmt->execute([':schedule_id' => $schedule_id, ':date' => $date]);
+    return $stmt->fetchColumn() > 0;
+}
+
+function pet_has_overlapping_appointment(PDO $pdo, int $pet_id, string $date, string $start_time, string $end_time): bool {
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) FROM appointments
+        WHERE pet_id = :pet_id
+          AND appointment_date = :date
+          AND status = 'scheduled'
+          AND (
+            (start_time < :end_time AND end_time > :start_time)
+          )
+    ");
+    $stmt->execute([
+        ':pet_id' => $pet_id,
+        ':date' => $date,
+        ':start_time' => $start_time,
+        ':end_time' => $end_time
+    ]);
+    return $stmt->fetchColumn() > 0;
+}
+function create_appointment(
+    PDO $pdo,
+    int $pet_id,
+    int $veterinarian_id,
+    int $service_id,
+    string $appointment_date,
+    string $start_time,
+    string $end_time,
+    string $status,
+    int $user_id,
+    int $schedule_id
+): string {
+    $reservation_code = 'RSV-' . strtoupper(bin2hex(random_bytes(3))); // npr. RSV-4F3A1B
+
+    $stmt = $pdo->prepare("
+        INSERT INTO appointments 
+        (pet_id, veterinarian_id, service_id, appointment_date, start_time, end_time, status, user_id, schedule_id, reservation_code)
+        VALUES (:pet_id, :vet_id, :service_id, :appointment_date, :start_time, :end_time, :status, :user_id, :schedule_id, :reservation_code)
+    ");
+    $stmt->execute([
+        ':pet_id' => $pet_id,
+        ':vet_id' => $veterinarian_id,
+        ':service_id' => $service_id,
+        ':appointment_date' => $appointment_date,
+        ':start_time' => $start_time,
+        ':end_time' => $end_time,
+        ':status' => $status,
+        ':user_id' => $user_id,
+        ':schedule_id' => $schedule_id,
+        ':reservation_code' => $reservation_code
+    ]);
+    return $reservation_code;
+}
+function send_appointment_email(string $to_email, string $to_name, string $reservation_code, string $appointment_date, string $start_time): bool {
+    $subject = "Potvrda rezervacije termina - PetCare";
+    $message = "Poštovani $to_name,\n\nVaša rezervacija termina za $appointment_date u $start_time je uspešno zavedena.\n" .
+        "Vaš kod rezervacije je: $reservation_code\n" .
+        "Molimo Vas da ovaj kod ponesete prilikom dolaska u ordinaciju.\n\n" .
+        "Srdačan pozdrav,\nPetCare tim";
+
+    $headers = "From: noreply@petcare.com\r\n" .
+        "Reply-To: noreply@petcare.com\r\n" .
+        "Content-Type: text/plain; charset=utf-8\r\n";
+
+    return mail($to_email, $subject, $message, $headers);
+}
+function get_user_active_appointments(PDO $pdo, int $user_id): array {
+    $stmt = $pdo->prepare("
+        SELECT a.*, v.user_id AS vet_user_id, u.first_name AS vet_first_name, u.last_name AS vet_last_name
+        FROM appointments a
+        JOIN veterinarians v ON a.veterinarian_id = v.id
+        JOIN users u ON v.user_id = u.id
+        WHERE a.user_id = :user_id AND a.status = 'scheduled' AND a.appointment_date >= CURDATE()
+        ORDER BY a.appointment_date, a.start_time
+    ");
+    $stmt->execute([':user_id' => $user_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+function can_cancel_appointment(string $appointment_date, string $start_time): bool {
+    $appointment_datetime = new DateTime("$appointment_date $start_time");
+    $now = new DateTime();
+    $interval = $now->diff($appointment_datetime);
+    $hours_diff = ($interval->days * 24) + $interval->h + ($interval->i / 60);
+    return $appointment_datetime > $now && $hours_diff >= 4;
+}
+
+function cancel_appointment(PDO $pdo, int $appointment_id, int $cancelled_by, string $cancellation_reason = null): bool {
+    if (!$cancelled_by) return false;
+
+    $pdo->beginTransaction();
+    try {
+        // Update status
+        $stmt1 = $pdo->prepare("UPDATE appointments SET status = 'canceled' WHERE id = :id");
+        $stmt1->execute([':id' => $appointment_id]);
+
+        // Insert cancellation record
+        $stmt2 = $pdo->prepare("
+            INSERT INTO appointment_cancellations (appointment_id, cancelled_by, cancellation_reason)
+            VALUES (:appointment_id, :cancelled_by, :reason)
+        ");
+        $stmt2->execute([
+            ':appointment_id' => $appointment_id,
+            ':cancelled_by' => $cancelled_by,
+            ':reason' => $cancellation_reason
+        ]);
+
+        $pdo->commit();
+        return true;
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        return false;
+    }
+}
+function get_pets_by_user(PDO $pdo, int $user_id): array {
+    $stmt = $pdo->prepare("
+        SELECT p.* FROM pets p
+        JOIN pet_owners po ON p.owner_id = po.id
+        WHERE po.user_id = :user_id
+    ");
+    $stmt->execute([':user_id' => $user_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+
 
 //TERMINI
 // Dohvatanje svih veterinara
-function get_all_vets(PDO $pdo): array {
-    $stmt = $pdo->query("
-        SELECT v.id, u.first_name, u.last_name 
-        FROM veterinarians v 
-        JOIN users u ON v.user_id = u.id
-    ");
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
+
 
 // Dohvatanje slobodnih termina za izabranog veterinara
 function get_available_terms_by_vet(PDO $pdo, int $vet_id): array {
@@ -334,45 +501,67 @@ function get_available_terms_by_vet(PDO $pdo, int $vet_id): array {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+//narednih 7 radnih dana
+function getNextWeekDaysWithoutSunday() {
+    $dates = [];
+    $current = new DateTime();  // trenutni dan (danas)
+    $oneDay = new DateInterval('P1D');
 
-
-
-function create_appointment(
-    PDO $pdo,
-    int $pet_id,
-    int $veterinarian_id,
-    int $service_id,
-    string $appointment_date,
-    string $status,
-    string $notes,
-    int $user_id,
-    int $schedule_id
-): void {
-    $stmt = $pdo->prepare("
-        INSERT INTO appointments 
-        (pet_id, veterinarian_id, service_id, appointment_date, time_slot, status, notes, user_id, schedule_id)
-        VALUES (?, ?, ?, ?, TIME(?), ?, ?, ?, ?)
-    ");
-    $stmt->execute([
-        $pet_id, $veterinarian_id, $service_id,
-        $appointment_date, $appointment_date,
-        $status, $notes, $user_id, $schedule_id
-    ]);
+    while (count($dates) < 7) {
+        // Proveri da li je trenutni dan nedelja (7)
+        if ($current->format('N') != 7) {
+            $dates[] = $current->format('Y-m-d');
+        }
+        $current->add($oneDay);
+    }
+    return $dates;
 }
 
+
+// NEGATIVNI POENI
+function mark_no_show(PDO $pdo, int $appointment_id): void {
+    // Označi u tabeli appointment_attendance da korisnik nije došao (attended=0)
+    $stmt = $pdo->prepare("
+        INSERT INTO appointment_attendance (appointment_id, attended)
+        VALUES (?, 0)
+        ON DUPLICATE KEY UPDATE attended = 0
+    ");
+    $stmt->execute([$appointment_id]);
+
+    // Takođe možeš update status termina u appointments na 'otkazano' ili 'nepojavljen'
+    $stmt2 = $pdo->prepare("UPDATE appointments SET status = 'otkazano' WHERE id = ?");
+    $stmt2->execute([$appointment_id]);
+}
+
+function mark_attended(PDO $pdo, int $appointment_id): void {
+    // Označi da je korisnik došao (attended=1)
+    $stmt = $pdo->prepare("
+        INSERT INTO appointment_attendance (appointment_id, attended)
+        VALUES (?, 1)
+        ON DUPLICATE KEY UPDATE attended = 1
+    ");
+    $stmt->execute([$appointment_id]);
+
+    // Update status na 'obavljeno'
+    $stmt2 = $pdo->prepare("UPDATE appointments SET status = 'obavljeno' WHERE id = ?");
+    $stmt2->execute([$appointment_id]);
+}
+
+function get_user_id_by_appointment(PDO $pdo, int $appointment_id): ?int {
+    $stmt = $pdo->prepare("SELECT user_id FROM appointments WHERE id = ?");
+    $stmt->execute([$appointment_id]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $user ? (int)$user['user_id'] : null;
+}
+
+function increment_negative_points(PDO $pdo, int $user_id): void {
+    $stmt = $pdo->prepare("UPDATE users SET negative_points = negative_points + 1 WHERE id = ?");
+    $stmt->execute([$user_id]);
+}
 
 
 //CHANGE APPOINTMENTS
-function get_pets_by_user(PDO $pdo, int $user_id): array {
-    $stmt = $pdo->prepare("
-        SELECT p.*
-        FROM pets p
-        JOIN pet_owners po ON p.owner_id = po.id
-        WHERE po.user_id = ?
-    ");
-    $stmt->execute([$user_id]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
+
 
 
 function get_appointments_for_pet(PDO $pdo, int $pet_id): array {
@@ -426,11 +615,14 @@ function rebook_appointment(PDO $pdo, int $appointmentId, int $newScheduleId): v
         $appointmentId
     ]);
 }
-
-function is_schedule_slot_taken(PDO $pdo, int $schedule_id): bool {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM appointments WHERE schedule_id = ? AND status = 'zakazano'");
-    $stmt->execute([$schedule_id]);
-    return $stmt->fetchColumn() > 0;
+function get_all_vets(PDO $pdo): array {
+    $stmt = $pdo->query("
+        SELECT v.id AS vet_id, u.first_name, u.last_name, u.email
+        FROM veterinarians v
+        JOIN users u ON v.user_id = u.id
+        ORDER BY u.first_name, u.last_name
+    ");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 
@@ -467,9 +659,227 @@ function get_treatments_by_pet(PDO $pdo, int $pet_id): array {
 }
 
 
+//VET_ELECTRONIC_CARD
+function get_all_pets(PDO $pdo): array {
+    $sql = "
+        SELECT 
+            p.id AS pet_id,
+            p.name,
+            p.photo,
+            CONCAT(u.first_name, ' ', u.last_name) AS owner_name
+        FROM pets p
+        LEFT JOIN users u ON p.owner_id = u.id
+        ORDER BY p.name ASC
+    ";
+    $stmt = $pdo->query($sql);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+
+//medical record
+
+function get_all_treatments(PDO $pdo): array {
+    $stmt = $pdo->query("SELECT id, name, price FROM services ORDER BY name");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+
+function get_all_service_prices(PDO $pdo): array {
+    $stmt = $pdo->query("SELECT DISTINCT price FROM medical_records WHERE price IS NOT NULL");
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+function get_treatment_price(PDO $pdo, string $treatmentName): ?float {
+    $stmt = $pdo->prepare("SELECT price FROM services WHERE name = :name LIMIT 1");
+    $stmt->execute([':name' => $treatmentName]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ? (float)$row['price'] : null;
+}
+
+function get_pet_full_info(PDO $pdo, int $pet_id): ?array {
+    $sql = "SELECT 
+                p.*, 
+                pt.name AS type_name, 
+                pb.name AS breed_name,
+                po.id AS owner_id,
+                u.first_name AS owner_first_name,
+                u.last_name AS owner_last_name
+            FROM pets p
+            LEFT JOIN pet_types pt ON p.type_id = pt.id
+            LEFT JOIN pet_breeds pb ON p.breed_id = pb.id
+            LEFT JOIN pet_owners po ON p.owner_id = po.id
+            LEFT JOIN users u ON po.user_id = u.id
+            WHERE p.id = :pet_id
+            LIMIT 1";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(['pet_id' => $pet_id]);
+    $pet = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $pet ?: null;
+}
+// Dobavlja sve različite dijagnoze (distinct)
+function get_all_diagnoses(PDO $pdo): array {
+    $sql = "SELECT DISTINCT diagnosis FROM medical_records ORDER BY diagnosis";
+    $stmt = $pdo->query($sql);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+// Dobavlja sve usluge (tretmane)
+function get_all_services_vet(PDO $pdo): array {
+    $sql = "SELECT id, name, price FROM services ORDER BY name";
+    $stmt = $pdo->query($sql);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// Dobavlja najnoviji (najkasniji) zakazani termin (appointment) za ljubimca i veterinara
+function get_latest_appointment_id(PDO $pdo, int $pet_id, int $vet_id): ?int {
+    $sql = "SELECT id FROM appointments WHERE pet_id = :pet_id AND veterinarian_id = :vet_id ORDER BY appointment_date DESC, start_time DESC LIMIT 1";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(['pet_id' => $pet_id, 'vet_id' => $vet_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ? (int)$row['id'] : null;
+}
+
+//negativni poeni
+function mark_appointment_no_show(PDO $pdo, int $appointment_id): void {
+    $stmt = $pdo->prepare("UPDATE appointments SET no_show = 1 WHERE id = ?");
+    $stmt->execute([$appointment_id]);
+}
+
+function add_penalty_to_owner(PDO $pdo, int $user_id): void {
+    $stmt = $pdo->prepare("UPDATE users SET negative_points = negative_points + 1 WHERE id = ?");
+    $stmt->execute([$user_id]);
+}
 
 
 
+function save_medical_note(PDO $pdo, int $appointment_id, int $vet_id, int $pet_id, string $diagnosis, string $treatment, float $price): void {
+    $stmt = $pdo->prepare("INSERT INTO medical_records (appointment_id, veterinarian_id, pet_id, diagnosis, treatment, price, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+    $stmt->execute([$appointment_id, $vet_id, $pet_id, $diagnosis, $treatment, $price]);
+}
+
+function delete_medical_note(PDO $pdo, int $id): void {
+    $stmt = $pdo->prepare("DELETE FROM medical_records WHERE id = ?");
+    $stmt->execute([$id]);
+}
+
+function update_medical_note(PDO $pdo, int $id, string $diagnosis, string $treatment, float $price): void {
+    $stmt = $pdo->prepare("UPDATE medical_records SET diagnosis = ?, treatment = ?, price = ? WHERE id = ?");
+    $stmt->execute([$diagnosis, $treatment, $price, $id]);
+}
+
+function get_medical_records_by_appointment(PDO $pdo, int $appointment_id): array {
+    $stmt = $pdo->prepare("
+        SELECT mr.*, u.first_name, u.last_name
+        FROM medical_records mr
+        JOIN veterinarians v ON mr.veterinarian_id = v.id
+        JOIN users u ON v.user_id = u.id
+        WHERE mr.appointment_id = ?
+        ORDER BY mr.created_at DESC
+    ");
+    $stmt->execute([$appointment_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+
+
+
+function add_negative_point(PDO $pdo, int $appointment_id): bool {
+    // Pronađi user_id preko termina
+    $stmt = $pdo->prepare("
+        SELECT u.id AS user_id
+        FROM appointments a
+        JOIN pets p ON a.pet_id = p.id
+        JOIN users u ON p.owner_id = u.id
+        WHERE a.id = ?
+    ");
+    $stmt->execute([$appointment_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        return false;
+    }
+
+    // Uvećaj broj negativnih poena za tog korisnika
+    $stmtUpdate = $pdo->prepare("UPDATE users SET negative_points = negative_points + 1 WHERE id = ?");
+    return $stmtUpdate->execute([$row['user_id']]);
+}
+function get_owner_id_by_appointment(PDO $pdo, int $appointment_id): ?int {
+    $stmt = $pdo->prepare("
+        SELECT a.user_id 
+        FROM appointments a
+        WHERE a.id = :appointment_id
+    ");
+    $stmt->execute(['appointment_id' => $appointment_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ? (int)$row['user_id'] : null;
+}
+
+
+function get_or_create_today_appointment(PDO $pdo, int $pet_id, int $veterinarian_id): ?int {
+    $todayStart = date('Y-m-d 00:00:00');
+    $todayEnd = date('Y-m-d 23:59:59');
+
+    // Pokušaj da pronađeš termin za danas
+    $stmt = $pdo->prepare("
+        SELECT id FROM appointments 
+        WHERE pet_id = :pet_id 
+          AND veterinarian_id = :vet_id
+          AND appointment_date BETWEEN :start AND :end
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':pet_id' => $pet_id,
+        ':vet_id' => $veterinarian_id,
+        ':start' => $todayStart,
+        ':end' => $todayEnd
+    ]);
+
+    $appointment = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($appointment) {
+        return (int)$appointment['id'];
+    }
+
+    // Nema termina za danas, kreiraj novi
+    $now = date('Y-m-d H:i:s');
+    $stmt = $pdo->prepare("
+        INSERT INTO appointments (pet_id, veterinarian_id, appointment_date, start_time, end_time, service_id)
+        VALUES (:pet_id, :vet_id, :date, :start, :end, :service)
+    ");
+
+    // Ovde stavljamo vreme termina kao sada (start) i pola sata kasnije (end)
+    $start_time = date('H:i:s');
+    $end_time = date('H:i:s', strtotime('+30 minutes'));
+
+    // Moraš imati validan service_id (možeš izabrati neki default ili najjeftiniji)
+    $defaultServiceId = get_default_service_id($pdo); // Napravi ovu funkciju
+
+    $stmt->execute([
+        ':pet_id' => $pet_id,
+        ':vet_id' => $veterinarian_id,
+        ':date' => date('Y-m-d'),
+        ':start' => $start_time,
+        ':end' => $end_time,
+        ':service' => $defaultServiceId
+    ]);
+
+    return (int)$pdo->lastInsertId();
+}
+function get_default_service_id(PDO $pdo): int {
+    $stmt = $pdo->query("SELECT id FROM services ORDER BY price ASC LIMIT 1");
+    $service = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $service ? (int)$service['id'] : 1; // Ako nema usluga, vrati 1 (ili neki validan id)
+}
+
+function get_appointments_for_pet_and_vet(PDO $pdo, int $petId, int $vetId): array {
+    $stmt = $pdo->prepare("SELECT id, appointment_date, start_time, end_time FROM appointments WHERE pet_id = ? AND veterinarian_id = ? AND status = 'scheduled' ORDER BY appointment_date DESC");
+    $stmt->execute([$petId, $vetId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+//VET TREATMENTS
+function get_services(PDO $pdo): array {
+    $stmt = $pdo->query("SELECT id, name, price FROM services ORDER BY name");
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 
 
@@ -675,61 +1085,140 @@ function get_vet_info(PDO $pdo, int $vetId): array {
 }
 
 
-function get_vet_schedule(PDO $pdo, int $vetId): array {
-    $stmt = $pdo->prepare("
-        SELECT id, start_time, end_time
-        FROM veterinarian_schedule
-        WHERE veterinarian_id = ?
-        ORDER BY start_time ASC
-    ");
+function get_vet_schedule($pdo, $vetId) {
+    $stmt = $pdo->prepare("SELECT DISTINCT day_of_week, start_time, end_time, id FROM veterinarian_schedule WHERE veterinarian_id = ? ORDER BY day_of_week, start_time");
     $stmt->execute([$vetId]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function get_schedule_by_id(PDO $pdo, int $id): ?array {
-    $stmt = $pdo->prepare("SELECT * FROM veterinarian_schedule WHERE id = ?");
-    $stmt->execute([$id]);
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+function get_time_slots() {
+    $timeSlots = [];
+    $start = strtotime('08:00');
+    $end = strtotime('16:00');
+    for ($time = $start; $time <= $end; $time += 30 * 60) {
+        $timeSlots[] = date('H:i', $time);
+    }
+    return $timeSlots;
 }
 
-function update_schedule(PDO $pdo, int $id, string $start, string $end): void {
-    $stmt = $pdo->prepare("UPDATE veterinarian_schedule SET start_time = ?, end_time = ? WHERE id = ?");
-    $stmt->execute([$start, $end, $id]);
+function schedule_exists($pdo, $vetId, $dayOfWeek, $startTime, $endTime) {
+    $sql = "SELECT COUNT(*) FROM veterinarian_schedule 
+            WHERE veterinarian_id = ? AND day_of_week = ? AND start_time = ? AND end_time = ?";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$vetId, $dayOfWeek, $startTime, $endTime]);
+    return $stmt->fetchColumn() > 0;
 }
+function schedule_exists_edit(PDO $pdo, int $vetId, string $dayOfWeek, string $startTime, string $endTime, int $excludeId): bool {
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) FROM veterinarian_schedule
+        WHERE veterinarian_id = :vetId
+          AND day_of_week = :dayOfWeek
+          AND id != :excludeId
+          AND (
+            (start_time < :endTime AND end_time > :startTime)
+          )
+    ");
+    $stmt->execute([
+        ':vetId' => $vetId,
+        ':dayOfWeek' => $dayOfWeek,
+        ':excludeId' => $excludeId,
+        ':startTime' => $startTime,
+        ':endTime' => $endTime,
+    ]);
+
+    return $stmt->fetchColumn() > 0;
+}
+
+function get_schedule_by_id_and_vet($pdo, int $id, int $vetId): ?array {
+    $stmt = $pdo->prepare("SELECT start_time, end_time FROM veterinarian_schedule WHERE id = ? AND veterinarian_id = ?");
+    $stmt->execute([$id, $vetId]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result ?: null;
+}
+
+function get_schedule_by_id($pdo, $id, $vetId) {
+    $stmt = $pdo->prepare("SELECT * FROM veterinarian_schedule WHERE id = ? AND veterinarian_id = ?");
+    $stmt->execute([$id, $vetId]);
+    return $stmt->fetch();
+}
+
+function update_schedule($pdo, $id, $vetId, $dayOfWeek, $startTime, $endTime) {
+    $stmt = $pdo->prepare("UPDATE veterinarian_schedule SET day_of_week = ?, start_time = ?, end_time = ? WHERE id = ? AND veterinarian_id = ?");
+    $stmt->execute([$dayOfWeek, $startTime, $endTime, $id, $vetId]);
+}
+
+
+
+
+function add_vet_schedule($pdo, $vetId, $dayOfWeek, $startTime, $endTime) {
+    $sql = "INSERT INTO veterinarian_schedule (veterinarian_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?)";
+    $stmt = $pdo->prepare($sql);
+    return $stmt->execute([$vetId, $dayOfWeek, $startTime, $endTime]);
+}
+
+function delete_vet_schedule(PDO $pdo, int $scheduleId, int $vetId): void {
+    $stmt = $pdo->prepare("DELETE FROM veterinarian_schedule WHERE id = ? AND veterinarian_id = ?");
+    $stmt->execute([$scheduleId, $vetId]);
+}
+
 
 function delete_schedule(PDO $pdo, int $id): void {
     $stmt = $pdo->prepare("DELETE FROM veterinarian_schedule WHERE id = ?");
     $stmt->execute([$id]);
 }
 
-function add_schedule(PDO $pdo, int $vet_id, string $start, string $end): void {
-    $startTime = new DateTime($start);
-    $endTime = new DateTime($end);
-    $now = new DateTime();
+function add_schedule(PDO $pdo, int $vet_id, string $start_time, string $end_time) {
+    $date = substr($start_time, 0, 10);
 
-    // Provera da termin nije u prošlosti
-    if ($startTime < $now || $endTime < $now) {
-        throw new Exception("Ne možete zakazati termin u prošlosti.");
+    $stmt = $pdo->prepare("SELECT SUM(TIMESTAMPDIFF(MINUTE, start_time, end_time)) AS total_minutes FROM veterinarian_schedule WHERE veterinarian_id = ? AND DATE(start_time) = ?");
+    $stmt->execute([$vet_id, $date]);
+    $row = $stmt->fetch();
+
+    $total_minutes = $row['total_minutes'] ?? 0;
+    $new_appointment_minutes = (strtotime($end_time) - strtotime($start_time)) / 60;
+    $total_minutes += $new_appointment_minutes;
+
+    // Ukloni ili komentariši proveru minimalnog trajanja:
+    // if ($total_minutes < 240) {
+    //    throw new Exception("Minimalno radno vreme je 4 sata.");
+    // }
+
+    $stmt = $pdo->prepare("INSERT INTO veterinarian_schedule (veterinarian_id, start_time, end_time) VALUES (?, ?, ?)");
+    $stmt->execute([$vet_id, $start_time, $end_time]);
+}
+function generate_time_options() {
+    $times = [];
+    $start = strtotime('08:00');
+    $end = strtotime('22:00');
+    for ($time = $start; $time <= $end; $time += 1800) {
+        $format = date('H:i', $time);
+        $times[] = $format;
     }
-
-    // Provera trajanja
-    $interval = $startTime->diff($endTime);
-    $hours = ($interval->days * 24) + $interval->h + $interval->i / 60;
-
-    if ($hours < 4) {
-        throw new Exception("Minimalno radno vreme je 4 sata.");
+    return $times;
+}
+function getDaysOptions($selected = null)
+{
+    $days = ['Monday' => 'Ponedeljak', 'Tuesday' => 'Utorak', 'Wednesday' => 'Sreda', 'Thursday' => 'Četvrtak', 'Friday' => 'Petak', 'Saturday' => 'Subota'];
+    $html = '';
+    foreach ($days as $eng => $serb) {
+        $sel = ($selected === $eng) ? 'selected' : '';
+        $html .= "<option value=\"$eng\" $sel>$serb</option>";
     }
+    return $html;
+}
 
-    if ($hours > 12) {
-        throw new Exception("Maksimalno radno vreme je 12 sati.");
+function getTimeOptions($selected = null)
+{
+    $start = strtotime("08:00");
+    $end = strtotime("22:00");
+    $html = '';
+    for ($time = $start; $time <= $end; $time += 1800) {
+        $label = date("H:i", $time);
+        $sel = ($selected === $label) ? 'selected' : '';
+        $html .= "<option value=\"$label\" $sel>$label</option>";
     }
-
-    // Ako sve prođe, upisujemo u bazu
-    $stmt = $pdo->prepare("
-        INSERT INTO veterinarian_schedule (veterinarian_id, start_time, end_time)
-        VALUES (?, ?, ?)
-    ");
-    $stmt->execute([$vet_id, $start, $end]);
+    return $html;
 }
 
 
@@ -738,6 +1227,7 @@ function get_appointments_for_vet(PDO $pdo, int $vetId): array {
         SELECT 
             a.id AS appointment_id,
             a.appointment_date,
+            a.start_time,
             p.name AS pet_name,
             CONCAT(u.first_name, ' ', u.last_name) AS owner_name
         FROM appointments a
@@ -751,29 +1241,6 @@ function get_appointments_for_vet(PDO $pdo, int $vetId): array {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/*function get_treatment_details(PDO $pdo, int $appointment_id, int $vet_id): ?array {
-    $stmt = $pdo->prepare("
-        SELECT
-            a.id AS appointment_id,
-            a.appointment_date,
-            a.notes,
-            p.name AS pet_name,
-            p.photo,
-            CONCAT(u.first_name, ' ', u.last_name) AS owner_name,
-            mr.diagnosis,
-            mr.treatment,
-            mr.price
-        FROM appointments a
-        JOIN pets p ON a.pet_id = p.id
-        JOIN pet_owners po ON p.owner_id = po.id
-        JOIN users u ON po.user_id = u.id
-        LEFT JOIN medical_records mr ON mr.appointment_id = a.id AND mr.veterinarian_id = ?
-        WHERE a.id = ? AND a.veterinarian_id = ?
-        LIMIT 1
-    ");
-    $stmt->execute([$vet_id, $appointment_id, $vet_id]);
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-}*/
 function get_treatment_details($pdo, $appointment_id, $vet_id) {
     $stmt = $pdo->prepare("
         SELECT 
@@ -789,17 +1256,6 @@ function get_treatment_details($pdo, $appointment_id, $vet_id) {
     ");
     $stmt->execute([$appointment_id, $vet_id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
-}
-function get_services_for_vet(PDO $pdo, int $vet_id): array {
-    $stmt = $pdo->prepare("
-        SELECT s.id, s.name, s.price
-        FROM services s
-        JOIN veterinarian_services vs ON vs.service_id = s.id
-        WHERE vs.veterinarian_id = ?
-        ORDER BY s.name
-    ");
-    $stmt->execute([$vet_id]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function get_service_price(PDO $pdo, int $id): float {
@@ -918,22 +1374,6 @@ function get_all_medical_records_for_appointment(PDO $pdo, int $appointment_id):
 
 require_once 'db.php';
 
-/*function login_user($pdo, $email, $password)
-{
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? LIMIT 1");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
-
-    if ($user && password_verify($password, $user['password'])) {
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['role_id'] = $user['role_id'];
-        $_SESSION['email'] = $user['email'];
-        return $user['role_id'];
-    } else {
-        return false;
-    }
-}*/
-
 function login_user(PDO $pdo, string $email, string $password): int|string|null {
     $stmt = $pdo->prepare("
         SELECT u.id AS user_id, u.email, u.password, u.role_id, u.is_active, v.id AS vet_id
@@ -962,8 +1402,6 @@ function login_user(PDO $pdo, string $email, string $password): int|string|null 
 
     return null;
 }
-
-
 
 
 //REGITER
@@ -1028,6 +1466,3 @@ function register_user($pdo, $first_name, $last_name, $email, $phone, $address, 
         return "Greška prilikom slanja e-maila: " . $mail->ErrorInfo;
     }
 }
-
-
-?>

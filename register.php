@@ -86,8 +86,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </section>
 </main>
 
-<footer>
-    <p>&copy; 2025 PetCare Ordinacija. Sva prava zadržana.</p>
+<footer class="custom-footer">
+    <div class="footer-content">
+        &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
+    </div>
 </footer>
 
 </body>

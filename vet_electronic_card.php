@@ -8,18 +8,31 @@ if (!isset($_SESSION['vet_id'])) {
 }
 
 $vetId = $_SESSION['vet_id'];
-$pets = get_vet_pets($pdo, $vetId);
+$pets = get_all_pets($pdo); // Vraća sve ljubimce sa vlasnicima
 
-// Podešavanje foldera za slike
-$photoDir = 'images/pets/';
-$defaultPhoto = 'images/default.jpg';
+// Tvoj projekat je u podfolderu 'vet', zato i dodajemo /vet/ u URL
+$subfolder = '/vet';
+
+// Putanja za prikaz u <img src=...>, relativno od root URL-a sajta
+$photoDirWeb = $subfolder . '/images/pets/';
+$defaultPhotoWeb = $subfolder . '/images/default.jpg';
+
+// Fizička putanja do foldera sa slikama na serveru (disku)
+$photoDirPhysical = $_SERVER['DOCUMENT_ROOT'] . $subfolder . '/images/pets/';
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="sr">
 <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Elektronski kartoni</title>
-    <link rel="stylesheet" href="css/css.css">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Glavni CSS -->
+    <link rel="stylesheet" href="css/css.css" />
 </head>
 <body>
 <header>
@@ -29,32 +42,62 @@ $defaultPhoto = 'images/default.jpg';
             <li><a href="vet_treatments_info.php">Tretmani</a></li>
             <li><a href="vet_electronic_card.php" class="active">Karton</a></li>
             <li><a href="vet_profile.php">Vet profil</a></li>
+            <li><a href="vet_schedule.php">Radno vreme</a></li>
             <li><a href="logout.php">Odjavi se</a></li>
         </ul>
     </nav>
 </header>
 
-<h2>Elektronski kartoni ljubimaca</h2>
-<section class="vets-section">
-    <div class="vet-cards">
+<main>
+    <section class="pets-section py-5">
+        <h2 class="text-center mb-5">Elektronski kartoni ljubimaca</h2>
 
+        <?php if ($pets): ?>
+            <div class="container">
+                <div class="row justify-content-center gy-4">
+                    <?php foreach ($pets as $pet): ?>
+                        <?php
+                        $photoFile = $pet['photo'] ?? '';
 
-        <?php foreach ($pets as $pet): ?>
-            <?php
-            $photoFile = $pet['photo'] ?? '';
-            $imgSrc = (!empty($photoFile) && file_exists(__DIR__ . "/images/pets/" . $photoFile))
-                ? "images/pets/" . $photoFile
-                : "images/default.jpg";
-            ?>
-            <div class="vet-card">
-                <a href="vet_medical_record.php?pet_id=<?= $pet['pet_id'] ?>">
-                    <img src="<?= htmlspecialchars($imgSrc) ?>" alt="Slika ljubimca" width="100" height="100">
-                </a>
-                <h3><?= htmlspecialchars($pet['name']) ?></h3>
-                <p><strong>Vlasnik:</strong> <?= htmlspecialchars($pet['owner_name']) ?></p>
+                        // Puna fizička putanja do slike na serveru
+                        $physicalPath = $photoDirPhysical . $photoFile;
+
+                        // Provera da li fajl postoji i da ime nije prazno
+                        if (!empty($photoFile) && file_exists($physicalPath)) {
+                            $imgSrc = $photoDirWeb . $photoFile;
+                        } else {
+                            $imgSrc = $defaultPhotoWeb;
+                        }
+                        ?>
+
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <div class="pet-card text-center p-3 h-100 border rounded shadow-sm bg-light">
+                                <a href="vet_medical_record.php?pet_id=<?= htmlspecialchars($pet['pet_id']) ?>">
+                                    <img src="<?= htmlspecialchars($imgSrc) ?>"
+                                         alt="Slika ljubimca"
+                                         width="120" height="120"
+                                         style="object-fit: cover; border-radius: 50%; border: 2px solid #fff; margin-bottom: 15px;">
+                                </a>
+                                <h5 class="text-success mb-2"><?= htmlspecialchars($pet['name']) ?></h5>
+                                <p><strong>Vlasnik:</strong> <?= htmlspecialchars($pet['owner_name']) ?></p>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
-        <?php endforeach; ?>
+        <?php else: ?>
+            <p class="text-center">Trenutno nema ljubimaca u bazi.</p>
+        <?php endif; ?>
+    </section>
+</main>
+
+<footer class="custom-footer">
+    <div class="footer-content text-center py-3">
+        &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
     </div>
-</section>
+</footer>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

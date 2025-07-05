@@ -27,6 +27,7 @@ $tretmani = get_appointments_for_vet($pdo, $vetId);
             <li><a href="vet_treatments_info.php" class="active">Tretmani</a></li>
             <li><a href="vet_electronic_card.php">Karton</a></li>
             <li><a href="vet_profile.php">Vet profil</a></li>
+            <li><a href="vet_schedule.php">Radno vreme</a></li>
             <li><a href="logout.php">Odjavi se</a></li>
         </ul>
     </nav>
@@ -45,7 +46,7 @@ $tretmani = get_appointments_for_vet($pdo, $vetId);
     <?php foreach ($tretmani as $t): ?>
         <tr>
             <td><?= date('Y-m-d', strtotime($t['appointment_date'])) ?></td>
-            <td><?= date('H:i', strtotime($t['appointment_date'])) ?></td>
+            <td><?= date('H:i', strtotime($t['start_time'])) ?></td>
             <td><?= htmlspecialchars($t['owner_name']) ?></td>
             <td><?= htmlspecialchars($t['pet_name']) ?></td>
             <td>

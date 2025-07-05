@@ -1,9 +1,8 @@
 <?php
 session_start();
 require_once 'db.php';
-
-$stmt = $pdo->query("SELECT name FROM services ORDER BY name");
-$services = $stmt->fetchAll();
+require_once 'functions.php';
+$services = get_all_services($pdo);
 ?>
 <!DOCTYPE html>
 <html lang="sr">
@@ -46,43 +45,49 @@ $services = $stmt->fetchAll();
             </ul>
         </div>
 
+        <!-- Desna strana: Carousel bez strelica -->
         <div class="col-md-6">
-            <div id="serviceCarousel" class="carousel slide" data-bs-ride="carousel">
+            <div id="serviceCarousel" class="carousel custom-carousel">
                 <div class="carousel-inner rounded shadow">
                     <div class="carousel-item active">
-                        <img src="images/clinic/clinic1.jpg" class="d-block w-100" alt="slika 1">
+                        <img src="images/clinic/index1.jpg" class="d-block w-100" alt="slika 1">
                     </div>
                     <div class="carousel-item">
-                        <img src="images/clinic/clinic2.jpg" class="d-block w-100" alt="slika 2">
+                        <img src="images/clinic/index2.jpg" class="d-block w-100" alt="slika 2">
                     </div>
                     <div class="carousel-item">
-                        <img src="images/clinic/clinic3.jpg" class="d-block w-100" alt="slika 3">
-                    </div>
-                    <div class="carousel-item active">
-                        <img src="images/clinic/clinic4.jpg" class="d-block w-100" alt="slika 4">
+                        <img src="images/clinic/index3.jpg" class="d-block w-100" alt="slika 3">
                     </div>
                     <div class="carousel-item">
-                        <img src="images/clinic/clinic2.jpg" class="d-block w-100" alt="slika 5">
+                        <img src="images/clinic/index4.jpg" class="d-block w-100" alt="slika 4">
                     </div>
                     <div class="carousel-item">
-                        <img src="images/clinic/clinic3.jpg" class="d-block w-100" alt="slika 6">
+                        <img src="images/clinic/index5.jpg" class="d-block w-100" alt="slika 5">
+                    </div>
+                    <div class="carousel-item">
+                        <img src="images/clinic/index6.jpg" class="d-block w-100" alt="slika 6">
+                    </div>
+                    <div class="carousel-item">
+                        <img src="images/clinic/index7.jpg" class="d-block w-100" alt="slika 7">
+                    </div>
+                    <div class="carousel-item">
+                        <img src="images/clinic/index8.jpg" class="d-block w-100" alt="slika 8">
                     </div>
                 </div>
-                <button class="carousel-control-prev" type="button" data-bs-target="#serviceCarousel" data-bs-slide="prev">
-                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#serviceCarousel" data-bs-slide="next">
-                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                </button>
             </div>
         </div>
     </div>
 </main>
 
-<footer>
-    <p>&copy; 2025 PetCare Ordinacija. Sva prava zadržana.</p>
+<footer class="custom-footer">
+    <div class="footer-content">
+        &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
+    </div>
 </footer>
 
+
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/script.js"></script>
 </body>
 </html>

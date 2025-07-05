@@ -1,8 +1,8 @@
 <?php
 $host = 'localhost';      // ili 127.0.0.1
 $db   = 'vet';            // ime tvoje baze
-$user = 'Edo';           // korisničko ime
-$pass = 'edo123';               // lozinka ako postoji
+$user = 'root';           // korisničko ime
+$pass = '';               // lozinka ako postoji
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";

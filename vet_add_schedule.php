@@ -7,29 +7,40 @@ if (!isset($_SESSION['vet_id'])) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['datum'], $_POST['vreme_start'], $_POST['vreme_end'])) {
-    $datum = $_POST['datum'];
-    $vreme_start = $_POST['vreme_start'];
-    $vreme_end = $_POST['vreme_end'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $vetId = $_SESSION['vet_id'];
+    $dayOfWeek = $_POST['day_of_week'] ?? '';
+    $start = $_POST['start_time'] ?? '';
+    $end = $_POST['end_time'] ?? '';
 
-    $start_datetime = "$datum $vreme_start";
-    $end_datetime = "$datum $vreme_end";
-
-    if (strtotime($end_datetime) <= strtotime($start_datetime)) {
-        echo "<script>alert('❌ Greška: Kraj mora biti posle početka.'); window.location.href='vet_profile.php';</script>";
+    if (!$dayOfWeek || !$start || !$end) {
+        $_SESSION['msg'] = "Sva polja su obavezna.";
+        header("Location: vet_schedule.php");
         exit;
     }
 
-    try {
-        add_schedule($pdo, $_SESSION['vet_id'], $start_datetime, $end_datetime);
-        header("Location: vet_profile.php");
-        exit;
-    } catch (Exception $e) {
-        $msg = addslashes($e->getMessage()); // escape za JS
-        echo "<script>alert('Greška: $msg'); window.location.href='vet_profile.php';</script>";
+    if ($start >= $end) {
+        $_SESSION['msg'] = "Početak termina mora biti pre kraja.";
+        header("Location: vet_schedule.php");
         exit;
     }
-} else {
-    echo "<script>alert('Nevažeći zahtev.'); window.location.href='vet_profile.php';</script>";
+
+    global $pdo;
+
+    if (schedule_exists($pdo, $vetId, $dayOfWeek, $start, $end)) {
+        $_SESSION['msg'] = "Termin za odabrani dan i vreme već postoji.";
+        header("Location: vet_schedule.php");
+        exit;
+    }
+
+    $success = add_vet_schedule($pdo, $vetId, $dayOfWeek, $start, $end);
+    if ($success) {
+        $_SESSION['msg'] = "Termin je uspešno dodat.";
+    } else {
+        $_SESSION['msg'] = "Došlo je do greške prilikom dodavanja termina.";
+    }
+
+    header("Location: vet_schedule.php");
     exit;
 }
+?>

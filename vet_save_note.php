@@ -1,30 +1,46 @@
 <?php
 session_start();
 require_once 'functions.php';
+header('Content-Type: application/json');
 
 if (!isset($_SESSION['vet_id'])) {
-    header("Location: login.php");
+    echo json_encode(['success' => false, 'message' => 'Niste prijavljeni.']);
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $appointment_id = (int)$_POST['appointment_id'];
+    $appointment_id = (int)($_POST['appointment_id'] ?? 0);
     $vet_id = $_SESSION['vet_id'];
-    $diagnosis = trim($_POST['diagnosis']);
-    $treatment_id = (int)$_POST['treatment_id'];
+    $note = trim($_POST['note'] ?? '');
+    $treatment_id = isset($_POST['treatment_id']) && $_POST['treatment_id'] !== '' ? (int)$_POST['treatment_id'] : null;
+    $no_show = isset($_POST['no_show']) && $_POST['no_show'] == '1';
 
-    $treatment = get_service_name($pdo, $treatment_id);
-    $price = get_service_price($pdo, $treatment_id);
+    if ($appointment_id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Neispravan ID termina.']);
+        exit;
+    }
 
-    $stmt = $pdo->prepare("
-        INSERT INTO medical_records (appointment_id, veterinarian_id, pet_id, diagnosis, treatment, price)
-        SELECT a.id, a.veterinarian_id, a.pet_id, ?, ?, ?
-        FROM appointments a
-        WHERE a.id = ?
-    ");
-    $stmt->execute([$diagnosis, $treatment, $price, $appointment_id]);
+    if ($no_show) {
+        $owner_id = get_owner_id_by_appointment($pdo, $appointment_id);
+        if ($owner_id) {
+            add_negative_point($pdo, $owner_id);
+        }
+        save_medical_note($pdo, $appointment_id, $vet_id, $note, null, null, true);
+        echo json_encode(['success' => true]);
+        exit;
+    }
 
-    header("Location: vet_treatments_details.php?appointment_id=" . $appointment_id);
-    exit;
+    if ($treatment_id === null) {
+        echo json_encode(['success' => false, 'message' => 'Tretman je obavezan.']);
+        exit;
+    }
+
+    $treatment = get_service_by_id($pdo, $treatment_id);
+    if (!$treatment) {
+        echo json_encode(['success' => false, 'message' => 'Nepostojeći tretman.']);
+        exit;
+    }
+
+    save_medical_note($pdo, $appointment_id, $vet_id, $note, $treatment_id, $treatment['price'], false);
+    echo json_encode(['success' => true]);
 }
-?>

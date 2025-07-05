@@ -11,10 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $role = login_user($pdo, $email, $password);
 
-    if ($role === 'not_active') {
-        $message = "⚠️ Vaš nalog nije aktiviran. Proverite svoj e-mail i kliknite na aktivacioni link.";
-    } elseif ($role === 1) {
-        header("Location: admin_dashboard.php");
+    if ($role === 1) {
+        header("Location: admin_dashboard.php"); // ili admin.php, po tvojoj strukturi
         exit;
     } elseif ($role === 2 && isset($_SESSION['vet_id'])) {
         header("Location: vet_profile.php");
@@ -27,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="sr">
@@ -76,8 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </section>
 </main>
 
-<footer>
-    <p>&copy; 2025 PetCare Ordinacija. Sva prava zadržana.</p>
+<footer class="custom-footer">
+    <div class="footer-content">
+        &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
+    </div>
 </footer>
 
 </body>
