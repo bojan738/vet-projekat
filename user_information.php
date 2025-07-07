@@ -2,32 +2,36 @@
 session_start();
 require_once 'auth.php';
 requireRegularUser();
-require_once 'db.php';
-require_once 'functions.php';
 
+require_once 'db_config.php';
+require_once 'functions.php';
+$vetApp = new VeterinarskaOrdinacija();
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
 
+$db = (new DBConfig())->getConnection();
+$vetApp = new VeterinarskaOrdinacija($db);
+
 $user_id = $_SESSION['user_id'];
-$user = get_user_profile($pdo, $user_id);
+$user = $vetApp->getUserProfile($user_id);
 $success_message = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $first_name = $_POST['first_name'] ?? '';
     $last_name = $_POST['last_name'] ?? '';
-    $email = $_POST['email'] ?? '';
     $phone = $_POST['phone'] ?? '';
+    $email = $_POST['email'] ?? '';
 
-    update_user_profile($pdo, $user_id, $first_name, $last_name, $email, $phone);
-    $user = get_user_profile($pdo, $user_id);
+    $vetApp->updateUserProfile($user_id, $first_name, $last_name, $email, $phone);
+
+    $user = $vetApp->getUserProfile($user_id);
     $success_message = "Podaci su uspešno ažurirani.";
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <title>Profil korisnika</title>
     <link rel="stylesheet" href="css/css.css">
@@ -59,17 +63,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST">
             <div class="form-group">
                 <label for="first_name" class="form-label">Ime:</label>
-                <input type="text" id="first_name" name="first_name" value="<?= htmlspecialchars($user['first_name']) ?>" class="form-input">
+                <input type="text" id="first_name" name="first_name" value="<?= htmlspecialchars($user['first_name']) ?>" class="form-input" required>
             </div>
 
             <div class="form-group">
                 <label for="last_name" class="form-label">Prezime:</label>
-                <input type="text" id="last_name" name="last_name" value="<?= htmlspecialchars($user['last_name']) ?>" class="form-input">
+                <input type="text" id="last_name" name="last_name" value="<?= htmlspecialchars($user['last_name']) ?>" class="form-input" required>
             </div>
 
             <div class="form-group">
                 <label for="email" class="form-label">Email:</label>
-                <input type="email" id="email" name="email" value="<?= htmlspecialchars($user['email']) ?>" class="form-input">
+                <input type="email" id="email" name="email" value="<?= htmlspecialchars($user['email']) ?>" class="form-input" readonly>
             </div>
 
             <p class="register-link"><a href="password_reset.php">Promeni lozinku</a></p>
@@ -84,10 +88,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </section>
 </main>
 
-</body>
 <footer class="custom-footer">
     <div class="footer-content">
         &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
     </div>
 </footer>
+</body>
 </html>

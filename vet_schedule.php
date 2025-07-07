@@ -1,6 +1,10 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireVeterinarian();
+require_once 'db_config.php';
 require_once 'functions.php';
+
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
@@ -8,16 +12,21 @@ if (!isset($_SESSION['vet_id'])) {
 }
 
 $vetId = $_SESSION['vet_id'];
-$schedule = get_vet_schedule($pdo, $vetId);
-$daysOfWeek = ['Ponedeljak', 'Utorak', 'Sreda', 'Cetvrtak', 'Petak', 'Subota'];
-$timeSlots = get_time_slots();  // niz vremena po 30 min, npr. '08:00:00', '08:30:00', ...
 
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
+
+$schedule = $ordinacija->getVetSchedule($vetId);
+$daysOfWeek = ['Ponedeljak', 'Utorak', 'Sreda', 'Cetvrtak', 'Petak', 'Subota'];
+$timeSlots = $ordinacija->getTimeSlots();
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Upravljanje radnim vremenom</title>
+    <meta charset="UTF-8">
+    <title>Radno vreme</title>
     <link rel="stylesheet" href="css/css.css">
 </head>
 <body class="vet-schedule-page">
@@ -40,13 +49,13 @@ $timeSlots = get_time_slots();  // niz vremena po 30 min, npr. '08:00:00', '08:3
     <?php unset($_SESSION['msg']); ?>
 <?php endif; ?>
 
-<h2 class="form-title">Dodaj termin</h2>
+<h2 class="form-title">Dodaj radni termin</h2>
 <form method="POST" action="vet_add_schedule.php" class="form-section vet-schedule-form">
     <div class="form-row vet-form-row">
         <div class="form-group vet-form-group">
-            <label for="day_of_week" class="form-label vet-form-label">Dan u nedelji:</label>
+            <label for="day_of_week" class="form-label vet-form-label">Dan:</label>
             <select id="day_of_week" name="day_of_week" required class="form-input vet-form-input">
-                <option value="" disabled selected>Izaberi dan</option>
+                <option value="" disabled selected>Select day</option>
                 <?php foreach ($daysOfWeek as $day): ?>
                     <option value="<?= $day ?>"><?= $day ?></option>
                 <?php endforeach; ?>
@@ -54,7 +63,7 @@ $timeSlots = get_time_slots();  // niz vremena po 30 min, npr. '08:00:00', '08:3
         </div>
 
         <div class="form-group vet-form-group">
-            <label for="start_time" class="form-label vet-form-label">Početak:</label>
+            <label for="start_time" class="form-label vet-form-label">Pocetak:</label>
             <select id="start_time" name="start_time" required class="form-input vet-form-input">
                 <option value="" disabled selected>Izaberi vreme</option>
                 <?php foreach ($timeSlots as $time): ?>
@@ -74,16 +83,15 @@ $timeSlots = get_time_slots();  // niz vremena po 30 min, npr. '08:00:00', '08:3
         </div>
     </div>
 
-    <button type="submit" name="add_schedule" class="cta-button vet-cta-button">Dodaj termin</button>
+    <button type="submit" name="add_schedule" class="cta-button vet-cta-button">Dodaj</button>
 </form>
-
-
+<div style="padding-left: 20px; padding-right: 20px">
 <h2>Lista termina</h2>
 <table class="vet-table">
     <thead>
     <tr>
         <th>Dan</th>
-        <th>Početak</th>
+        <th>Pocetak</th>
         <th>Kraj</th>
         <th>Akcije</th>
     </tr>
@@ -97,17 +105,17 @@ $timeSlots = get_time_slots();  // niz vremena po 30 min, npr. '08:00:00', '08:3
             <td>
                 <form method="POST" action="vet_schedule_edit.php" style="display:inline;">
                     <input type="hidden" name="id" value="<?= $row['id'] ?>">
-                    <button type="submit" class="vet-btn-link">Izmeni</button>
+                    <button type="submit" class="cta-button" style="height: 40px; width: 100px;">Izmeni</button>
                 </form>
-                <form method="POST" action="vet_schedule_delete.php" style="display:inline;" onsubmit="return confirm('Da li ste sigurni da želite da obrišete ovaj termin?');">
+                <form method="POST" action="vet_schedule_delete.php" style="display:inline;" onsubmit="return confirm('Da li ste sigurni da zelite da izbrisete ovaj termin?');">
                     <input type="hidden" name="id" value="<?= $row['id'] ?>">
-                    <button type="submit" class="vet-btn-link" style="color:#f44336;">Obriši</button>
+                    <button type="submit" class="cta-button" style="height: 40px; width: 100px;">Izbrisi</button>
                 </form>
             </td>
         </tr>
     <?php endforeach; ?>
     </tbody>
 </table>
-
+</div>
 </body>
 </html>

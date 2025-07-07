@@ -1,6 +1,10 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireVeterinarian();
+require_once 'db_config.php';
 require_once 'functions.php';
+
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
@@ -13,34 +17,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start = $_POST['start_time'] ?? '';
     $end = $_POST['end_time'] ?? '';
 
-    if (!$dayOfWeek || !$start || !$end) {
+    if (empty($dayOfWeek) || empty($start) || empty($end)) {
         $_SESSION['msg'] = "Sva polja su obavezna.";
         header("Location: vet_schedule.php");
         exit;
     }
 
-    if ($start >= $end) {
+    if (strtotime($start) >= strtotime($end)) {
         $_SESSION['msg'] = "Početak termina mora biti pre kraja.";
         header("Location: vet_schedule.php");
         exit;
     }
 
-    global $pdo;
+    $db = new DBConfig();
+    $pdo = $db->getConnection();
+    $ordinacija = new VeterinarskaOrdinacija($pdo);
 
-    if (schedule_exists($pdo, $vetId, $dayOfWeek, $start, $end)) {
+    if ($ordinacija->scheduleExists($vetId, $dayOfWeek, $start, $end)) {
         $_SESSION['msg'] = "Termin za odabrani dan i vreme već postoji.";
         header("Location: vet_schedule.php");
         exit;
     }
 
-    $success = add_vet_schedule($pdo, $vetId, $dayOfWeek, $start, $end);
-    if ($success) {
+    if ($ordinacija->addVetSchedule($vetId, $dayOfWeek, $start, $end)) {
         $_SESSION['msg'] = "Termin je uspešno dodat.";
     } else {
-        $_SESSION['msg'] = "Došlo je do greške prilikom dodavanja termina.";
+        $_SESSION['msg'] = "Greška pri dodavanju termina.";
     }
 
     header("Location: vet_schedule.php");
     exit;
 }
-?>

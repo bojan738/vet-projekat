@@ -1,6 +1,9 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once 'db_config.php';
+require_once 'functions.php';
+
+$ordinacija = new VeterinarskaOrdinacija();
 
 $poruka = '';
 $uspesno = false;
@@ -8,12 +11,10 @@ $uspesno = false;
 if (isset($_GET['token'])) {
     $token = $_GET['token'];
 
-    $stmt = $pdo->prepare("UPDATE users SET is_active = 1, activation_token = NULL WHERE activation_token = ?");
-    $stmt->execute([$token]);
+    $uspesno = $ordinacija->activateUserByToken($token);
 
-    if ($stmt->rowCount()) {
+    if ($uspesno) {
         $poruka = "✅ Vaš nalog je uspešno aktiviran. Sada se možete prijaviti.";
-        $uspesno = true;
     } else {
         $poruka = "❌ Aktivacioni link je nevažeći ili je već iskorišćen.";
     }
@@ -38,20 +39,18 @@ if (isset($_GET['token'])) {
             <div class="card shadow p-4">
                 <h3 class="text-center mb-4">Aktivacija naloga</h3>
                 <div class="alert <?= $uspesno ? 'alert-success' : 'alert-danger' ?>">
-                    <?= $poruka ?>
+                    <?= htmlspecialchars($poruka) ?>
                 </div>
-                <?php if ($uspesno): ?>
-                    <div class="text-center">
-                        <a href="login.php" class="btn btn-primary">Prijavi se</a>
-                    </div>
-                <?php else: ?>
-                    <div class="text-center">
-                        <a href="index.php" class="btn btn-secondary">Početna</a>
-                    </div>
-                <?php endif; ?>
+                <div class="text-center">
+                    <a href="<?= $uspesno ? 'login.php' : 'index.php' ?>" class="btn <?= $uspesno ? 'btn-primary' : 'btn-secondary' ?>">
+                        <?= $uspesno ? 'Prijavi se' : 'Početna' ?>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
 </body>
 </html>
+

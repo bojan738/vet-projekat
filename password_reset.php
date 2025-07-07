@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <title>Izmena lozinke</title>
     <link rel="stylesheet" href="css/css.css">

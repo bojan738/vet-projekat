@@ -1,38 +1,40 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireVeterinarian();
+require_once 'db_config.php';
 require_once 'functions.php';
+
+$pdo = (new DBConfig())->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
+
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
     exit;
 }
 
-if (!isset($_GET['pet_id'])) {
-    die("Nedostaje ID ljubimca.");
-}
-
-$pet_id = (int)$_GET['pet_id'];
 $vet_id = $_SESSION['vet_id'];
+$pet_id = (int)($_GET['pet_id'] ?? 0);
 
-// Dobavljanje detaljnih podataka o ljubimcu sa vlasnikom
-$pet = get_pet_full_info($pdo, $pet_id);
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
+
+$pet = $ordinacija->getPetFullInfo($pet_id);
 if (!$pet) {
     die("Ljubimac nije pronađen.");
 }
 
-// Dobavljanje istorije bolesti (beleški) za ljubimca i veterinara
-$records = get_medical_history_for_vet($pdo, $pet_id, $vet_id);
+$records = $ordinacija->getMedicalHistoryForVet($pet_id, $vet_id);
 
-// Slika ljubimca
+// IMAGE
 $photoDir = 'images/pets/';
 $defaultPhoto = 'images/default.jpg';
 $imgSrc = $defaultPhoto;
-if (!empty($pet['photo'])) {
-    $relativePath = $photoDir . $pet['photo'];
-    $absolutePath = __DIR__ . '/' . $relativePath;
-    if (file_exists($absolutePath)) {
-        $imgSrc = $relativePath;
-    }
+
+if (!empty($pet['photo']) && file_exists(__DIR__ . '/' . $photoDir . $pet['photo'])) {
+    $imgSrc = $photoDir . $pet['photo'];
 }
 ?>
 
@@ -64,10 +66,11 @@ if (!empty($pet['photo'])) {
         </ul>
     </nav>
 </header>
-<h2>Karton ljubimca: <?= htmlspecialchars($pet['name']) ?></h2>
+
+<h2 style="padding-left: 50px;">Karton ljubimca: <?= htmlspecialchars($pet['name']) ?></h2>
 
 <div class="container">
-    <div class="left">
+    <div class="left" style="max-width:900px; margin:30px auto; background:#fff; padding:30px; border-radius:12px; box-shadow:0 6px 15px rgba(0,0,0,0.1);">
         <img src="<?= htmlspecialchars($imgSrc) ?>" alt="Slika ljubimca" />
         <p><strong>Pol:</strong> <?= htmlspecialchars($pet['gender']) ?></p>
         <p><strong>Godine:</strong> <?= htmlspecialchars($pet['age']) ?></p>

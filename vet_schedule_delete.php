@@ -1,6 +1,10 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireVeterinarian();
+require_once 'db_config.php';
 require_once 'functions.php';
+
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
@@ -8,20 +12,24 @@ if (!isset($_SESSION['vet_id'])) {
 }
 
 if (!isset($_POST['id'])) {
-    die("Nije prosleđen ID termina za brisanje.");
+    die("⛔ Nije prosleđen ID termina za brisanje.");
 }
 
-$id = $_POST['id'];
-$vetId = $_SESSION['vet_id'];
+$id = (int)$_POST['id'];
+$vetId = (int)$_SESSION['vet_id'];
+
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
 
 try {
-    $stmt = $pdo->prepare("DELETE FROM veterinarian_schedule WHERE id = :id AND veterinarian_id = :vetId");
-    $stmt->execute(['id' => $id, 'vetId' => $vetId]);
-
-    $_SESSION['msg'] = "Termin uspešno obrisan.";
+    if ($ordinacija->deleteScheduleById($id, $vetId)) {
+        $_SESSION['msg'] = "✅ Termin uspešno obrisan.";
+    } else {
+        $_SESSION['msg'] = "⚠️ Termin nije pronađen ili nije vaš.";
+    }
     header("Location: vet_schedule.php");
     exit;
 } catch (PDOException $e) {
-    die("Greška prilikom brisanja termina: " . $e->getMessage());
+    die("❌ Greška prilikom brisanja termina: " . $e->getMessage());
 }
-?>

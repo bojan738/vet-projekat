@@ -1,30 +1,34 @@
 <?php
-if (session_status() == PHP_SESSION_NONE) {
+if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-/*Provera da li je korisnik ulogovan (bilo koja uloga).
-@return bool*/
+
+
+const ROLE_ADMIN = 1;
+const ROLE_VETERINARIAN = 2;
+const ROLE_USER = 3;
+
+
 function isLoggedIn(): bool {
     return isset($_SESSION['user_id']);
 }
 
-/*Zahtjeva da korisnik bude ulogovan (bilo koja uloga),
-inače redirekcija na login.php*/
-function requireLogin(): void {
-    if (!isLoggedIn()) {
-        header("Location: login.php");
-        exit;
-    }
-}
 
-/*Provera da li je korisnik admin.
-@return bool*/
 function isAdmin(): bool {
-    return isset($_SESSION['role_id']) && $_SESSION['role_id'] === 1;
+    return isset($_SESSION['role_id']) && $_SESSION['role_id'] === ROLE_ADMIN;
 }
 
-/*Zahtjeva da korisnik bude admin,
-inače redirekcija na login.php*/
+
+function isVeterinarian(): bool {
+    return isset($_SESSION['role_id']) && $_SESSION['role_id'] === ROLE_VETERINARIAN;
+}
+
+
+function isRegularUser(): bool {
+    return isset($_SESSION['role_id']) && $_SESSION['role_id'] === ROLE_USER;
+}
+
+
 function requireAdmin(): void {
     if (!isAdmin()) {
         header("Location: login.php");
@@ -32,14 +36,7 @@ function requireAdmin(): void {
     }
 }
 
-/*Provera da li je korisnik veterinar.
-@return bool*/
-function isVeterinarian(): bool {
-    return isset($_SESSION['role_id']) && $_SESSION['role_id'] === 2;
-}
 
-/*Zahtjeva da korisnik bude veterinar,
-inače redirekcija na login.php*/
 function requireVeterinarian(): void {
     if (!isVeterinarian()) {
         header("Location: login.php");
@@ -47,13 +44,6 @@ function requireVeterinarian(): void {
     }
 }
 
-/**
-
-Provera da li je korisnik običan korisnik.
-@return bool*/
-function isRegularUser(): bool {
-    return isset($_SESSION['role_id']) && $_SESSION['role_id'] == 3;  // koristimo == a ne ===
-}
 
 function requireRegularUser(): void {
     if (!isRegularUser()) {

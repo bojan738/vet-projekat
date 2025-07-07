@@ -1,6 +1,10 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireVeterinarian();
+require_once 'db_config.php';
 require_once 'functions.php';
+
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
@@ -9,20 +13,23 @@ if (!isset($_SESSION['vet_id'])) {
 
 $vetId = $_SESSION['vet_id'];
 
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && !isset($_POST['update'])) {
-    // Prikaz forme za izmenu
     $id = (int)$_POST['id'];
-    $schedule = get_schedule_by_id($pdo, $id, $vetId);
+    $schedule = $ordinacija->getScheduleById($id, $vetId);
     if (!$schedule) {
         $_SESSION['msg'] = "Termin nije pronađen.";
         header("Location: vet_schedule.php");
         exit;
     }
-    $timeSlots = get_time_slots(); // niz termina od pola sata od 08:00 do 22:00
+    $timeSlots = $ordinacija->getTimeSlots();
     ?>
 
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="sr">
     <head>
         <meta charset="UTF-8">
         <title>Izmeni termin</title>
@@ -34,17 +41,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && !isset($_POS
         <nav>
             <ul>
                 <li><a href="vet_treatments_info.php">Tretmani</a></li>
-                <li><a href="vet_electronic_card.php">Karton</a></li>
+                <li><a href="vet_electronic_card.php" class="active">Karton</a></li>
                 <li><a href="vet_profile.php">Vet profil</a></li>
-                <li><a href="vet_schedule.php" class="active">Radno vreme</a></li>
+                <li><a href="vet_schedule.php">Radno vreme</a></li>
                 <li><a href="logout.php">Odjavi se</a></li>
             </ul>
         </nav>
     </header>
 
-    <main style="max-width: 900px; margin: 30px auto; background: transparent; padding: 0;">
-        <div class=" edit-schedule-container">
-            <h2>Izmeni termin za dan: <?= htmlspecialchars($schedule['day_of_week']) ?></h2>
+    <main style="max-width: 900px; margin: 30px auto;">
+        <div class="edit-schedule-container">
+            <h2>Izmena termina za dan: <?= htmlspecialchars($schedule['day_of_week']) ?></h2>
 
             <?php if (isset($_SESSION['msg'])): ?>
                 <div class="msg-box"><?= htmlspecialchars($_SESSION['msg']) ?></div>
@@ -79,11 +86,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && !isset($_POS
                 </div>
 
                 <p style="text-align: center; margin-top: 20px;">
-                    <a href="vet_schedule.php" style="color: #4caf50; font-weight: 600; text-decoration: none;">Nazad</a>
+                    <a href="vet_schedule.php" style="color: #4caf50; font-weight: 600;">Nazad</a>
                 </p>
             </form>
         </div>
     </main>
+
+
     </body>
     </html>
 
@@ -96,40 +105,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id']) && !isset($_POS
 
     if (!$start || !$end) {
         $_SESSION['msg'] = "Sva polja su obavezna.";
-        header("Location: vet_schedule_edit.php?id=$id");
+        header("Location: vet_schedule_edit.php");
         exit;
     }
 
     if (strtotime($start) >= strtotime($end)) {
-        $_SESSION['msg'] = "Početak termina mora biti pre kraja.";
-        header("Location: vet_schedule_edit.php?id=$id");
+        $_SESSION['msg'] = "Vreme početka mora biti pre vremena kraja.";
+        header("Location: vet_schedule_edit.php");
         exit;
     }
 
-    // Učitaj dan termina da proslediš u proveru duplikata i update
-    $schedule = get_schedule_by_id($pdo, $id, $vetId);
+    $schedule = $ordinacija->getScheduleById($id, $vetId);
     if (!$schedule) {
         $_SESSION['msg'] = "Termin nije pronađen.";
         header("Location: vet_schedule.php");
         exit;
     }
+
     $dayOfWeek = $schedule['day_of_week'];
 
-    // Provera da li već postoji isti termin (osim ovog koji menjamo)
-    if (schedule_exists_edit($pdo, $vetId, $dayOfWeek, $start, $end, $id)) {
-        $_SESSION['msg'] = "Termin sa odabranim danom i vremenom već postoji.";
-        header("Location: vet_schedule_edit.php?id=$id");
+    if ($ordinacija->scheduleExistsEdit($vetId, $dayOfWeek, $start, $end, $id)) {
+        $_SESSION['msg'] = "Termin sa izabranim danom i vremenom već postoji.";
+        header("Location: vet_schedule_edit.php");
         exit;
     }
 
-    // Dodaj sekunde na vreme da baza prihvati (format HH:MM:SS)
+    // Format vremena
     if (strlen($start) === 5) $start .= ':00';
     if (strlen($end) === 5) $end .= ':00';
 
-    // Update termina u bazi
-    update_schedule($pdo, $id, $vetId, $dayOfWeek, $start, $end);
-
-    $_SESSION['msg'] = "Termin je uspešno izmenjen.";
+    $ordinacija->updateSchedule($id, $vetId, $dayOfWeek, $start, $end);
+    $_SESSION['msg'] = "Termin uspešno ažuriran.";
     header("Location: vet_schedule.php");
     exit;
 

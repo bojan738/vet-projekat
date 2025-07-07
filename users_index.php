@@ -1,10 +1,17 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once 'auth.php';
+requireRegularUser();
 
-// Učitavanje usluga iz baze
-$stmt = $pdo->query("SELECT name FROM services ORDER BY name");
-$services = $stmt->fetchAll();
+require_once 'db_config.php';
+require_once 'functions.php';
+
+
+$db = (new DBConfig())->getConnection();
+$vetApp = new VeterinarskaOrdinacija($db);
+
+
+$services = $vetApp->getAllServices();
 ?>
 <!DOCTYPE html>
 <html lang="sr">
@@ -24,8 +31,8 @@ $services = $stmt->fetchAll();
             <li><a href="users_reservation.php">Reservation</a></li>
             <li><a href="user_information.php">User Information</a></li>
             <li><a href="pet_information.php">Pet</a></li>
-            <li><a href="change_reservation.php" class="active">Change reservation</a></li>
-            <li><a href="pet_treatments.php" class="active">Pet treatments</a></li>
+            <li><a href="change_reservation.php">Change reservation</a></li>
+            <li><a href="pet_treatments.php">Pet treatments</a></li>
             <li><a href="logout.php">Odjavi se</a></li>
         </ul>
     </nav>

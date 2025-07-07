@@ -1,8 +1,12 @@
 <?php
-require_once 'db.php';
+require_once 'db_config.php';
 require_once 'functions.php';
 
-$veterinarians = get_all_veterinarians($pdo);
+$config = new DBConfig();
+$pdo = $config->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
+
+$veterinarians = $ordinacija->getAllVeterinarians();
 ?>
 <!DOCTYPE html>
 <html lang="sr">
@@ -11,11 +15,8 @@ $veterinarians = get_all_veterinarians($pdo);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PetCare - Veterinari</title>
 
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Tvoj (glavni) CSS -->
-    <link rel="stylesheet" href="css/css.css" />
+    <link rel="stylesheet" href="css/css.css">
 </head>
 <body>
 
@@ -39,7 +40,7 @@ $veterinarians = get_all_veterinarians($pdo);
                 <div class="row justify-content-center gy-4">
                     <?php foreach ($veterinarians as $vet): ?>
                         <?php
-                        $imageSrc = !empty($vet['photo']) && file_exists(__DIR__ . '/images/veterinarians/' . $vet['photo'])
+                        $imageSrc = (!empty($vet['photo']) && file_exists(__DIR__ . '/images/veterinarians/' . $vet['photo']))
                             ? 'images/veterinarians/' . $vet['photo']
                             : 'images/veterinarians/avatar.jpg';
                         ?>
@@ -53,7 +54,7 @@ $veterinarians = get_all_veterinarians($pdo);
                                      alt="Slika <?= htmlspecialchars($vet['first_name']) ?>"
                                      width="120" height="120"
                                      style="object-fit:cover;border-radius:50%;border:2px solid #ffffff;
-                        display:block;margin:0 auto 15px;">
+                                            display:block;margin:0 auto 15px;">
 
                                 <p><strong>Specijalizacija:</strong> <?= htmlspecialchars($vet['specialization'] ?: 'Nije navedena') ?></p>
                                 <p><strong>Email:</strong> <?= htmlspecialchars($vet['email']) ?></p>
@@ -67,14 +68,13 @@ $veterinarians = get_all_veterinarians($pdo);
         <?php endif; ?>
     </section>
 </main>
-
-<footer class="custom-footer">
-    <div class="footer-content">
+<footer class="custom-footer" style="padding: 10px; text-align: center;">
+    <div class="footer-content" style="padding: 10px;">
         &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
     </div>
 </footer>
 
-<!-- Bootstrap JS (bundled) -->
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

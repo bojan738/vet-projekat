@@ -1,78 +1,108 @@
 <?php
 session_start();
-require_once 'db.php';
-require_once 'functions.php';
+require_once 'db_config.php';
+require_once 'vendor/autoload.php';
 
-// PHPMailer autoload i namespace
-require_once __DIR__ . '/vendor/autoload.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+class PasswordManager {
+    private $pdo;
+
+    public function __construct() {
+        $db = new DBConfig();
+        $this->pdo = $db->getConnection();
+    }
+
+    public function requestPasswordChange($userId, $currentPassword, $newPassword, $confirmPassword) {
+        if ($newPassword !== $confirmPassword) {
+            throw new Exception("Lozinke se ne poklapaju.");
+        }
+
+        $stmt = $this->pdo->prepare("SELECT password, email, first_name FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            throw new Exception("Korisnik nije pronađen.");
+        }
+
+        if (!password_verify($currentPassword, $user['password'])) {
+            throw new Exception("Trenutna lozinka nije tačna.");
+        }
+
+        $token = bin2hex(random_bytes(16));
+        $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+
+        $stmt = $this->pdo->prepare("INSERT INTO password_resets (user_id, new_password, token, created_at) VALUES (?, ?, ?, NOW())");
+        $stmt->execute([$userId, $hashedPassword, $token]);
+
+        $this->sendConfirmationEmail($user['email'], $user['first_name'], $token);
+    }
+
+    private function sendConfirmationEmail($email, $firstName, $token) {
+        $activationLink = "http://localhost/VetProjekat/confirm_password_change.php?token=$token";
+
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host = 'sandbox.smtp.mailtrap.io';
+            $mail->SMTPAuth = true;
+            $mail->Username = 'f9cd07efd4a868';
+            $mail->Password = 'f4d0acd5a04c9b';
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port = 2525;
+
+            $mail->setFrom('noreply@petcare.com', 'PetCare');
+            $mail->addAddress($email, $firstName);
+
+            $mail->isHTML(true);
+            $mail->Subject = "Potvrda promene lozinke";
+            $mail->Body = "Zdravo " . htmlspecialchars($firstName) . ",<br><br>" .
+                "Kliknite na link da potvrdite promenu lozinke:<br>" .
+                "<a href='$activationLink'>$activationLink</a><br><br>" .
+                "Ako niste vi zahtevali ovu promenu, zanemarite ovaj mejl.";
+
+            $mail->send();
+        } catch (Exception $e) {
+            throw new Exception("Greška pri slanju mejla: " . $mail->ErrorInfo);
+        }
+    }
+}
+
+// MAIN
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
-
-$current_password = $_POST['current_password'] ?? '';
-$new_password = $_POST['new_password'] ?? '';
-$confirm_password = $_POST['confirm_password'] ?? '';
-
-if ($new_password !== $confirm_password) {
-    die("Lozinke se ne poklapaju.");
-}
-
-// Dohvati korisnika iz baze
-$stmt = $pdo->prepare("SELECT password, email, first_name FROM users WHERE id = ?");
-$stmt->execute([$user_id]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$user) {
-    die("Korisnik nije pronađen.");
-}
-
-if (!password_verify($current_password, $user['password'])) {
-    die("Trenutna lozinka nije tačna.");
-}
-
-// Generiši token i heš nove lozinke
-$token = bin2hex(random_bytes(16));
-$hashed_new_password = password_hash($new_password, PASSWORD_DEFAULT);
-
-// Ubaci u tabelu password_resets (napravi je ako već nemaš)
-$stmt = $pdo->prepare("INSERT INTO password_resets (user_id, new_password, token, created_at) VALUES (?, ?, ?, NOW())");
-$stmt->execute([$user_id, $hashed_new_password, $token]);
-
-// Pripremi aktivacioni link
-$activation_link = "http://localhost/VetProjekat/confirm_password_change.php?token=$token";
-
-
-// Podesi PHPMailer i pošalji mejl
-$mail = new PHPMailer(true);
-
 try {
-    $mail->isSMTP();
-    $mail->Host = 'sandbox.smtp.mailtrap.io';
-    $mail->SMTPAuth = true;
-    $mail->Username = '1a8d7f596b2e99';
-    $mail->Password = 'ee70af4ea947bc'; // koristi App Password za Gmail!
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 2525;
+    $manager = new PasswordManager();
+    $manager->requestPasswordChange(
+        $_SESSION['user_id'],
+        $_POST['current_password'] ?? '',
+        $_POST['new_password'] ?? '',
+        $_POST['confirm_password'] ?? ''
+    );
 
-    $mail->setFrom('noreply@petcare.com', 'PetCare');
-    $mail->addAddress($user['email'], $user['first_name']);
-
-    $mail->isHTML(true);
-    $mail->Subject = "Potvrda promene lozinke";
-    $mail->Body = "Zdravo " . htmlspecialchars($user['first_name']) . ",<br><br>" .
-        "Kliknite na link da potvrdite promenu lozinke:<br>" .
-        "<a href='$activation_link'>$activation_link</a><br><br>" .
-        "Ako niste vi zahtevali ovu promenu, zanemarite ovaj mejl.";
-
-    $mail->send();
-
-    echo "Poslali smo vam mejl sa linkom za potvrdu promene lozinke. Proverite svoj inbox.";
-} catch (Exception $e) {
-    echo "Greška pri slanju mejla: " . $mail->ErrorInfo;
+    echo <<<HTML
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <title>Obaveštenje</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="alert alert-success text-center" role="alert" style="font-size: 18px;">
+        ✅ Poslali smo vam mejl sa linkom za potvrdu promene lozinke. <br>📬 Proverite svoj inbox.
+    </div>
+</div>
+</body>
+</html>
+HTML;
+} catch (Exception $ex) {
+    echo '<div class="alert alert-danger text-center mt-4" style="font-size:18px;">❌ ' . $ex->getMessage() . '</div>';
 }
+?>

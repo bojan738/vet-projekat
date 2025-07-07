@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once 'db_config.php';
 require_once 'functions.php';
 header('Content-Type: application/json');
 
@@ -7,6 +8,10 @@ if (!isset($_SESSION['vet_id'])) {
     echo json_encode(['success' => false, 'message' => 'Niste prijavljeni.']);
     exit;
 }
+
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $appointment_id = (int)($_POST['appointment_id'] ?? 0);
@@ -21,11 +26,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($no_show) {
-        $owner_id = get_owner_id_by_appointment($pdo, $appointment_id);
+        $owner_id = $ordinacija->getOwnerIdByAppointment($appointment_id);
         if ($owner_id) {
-            add_negative_point($pdo, $owner_id);
+            $ordinacija->addNegativePoint($appointment_id);
         }
-        save_medical_note($pdo, $appointment_id, $vet_id, $note, null, null, true);
+        $ordinacija->saveMedicalNote($appointment_id, $vet_id, null, $note, null, null, true);
         echo json_encode(['success' => true]);
         exit;
     }
@@ -35,12 +40,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $treatment = get_service_by_id($pdo, $treatment_id);
+    $treatment = $ordinacija->getServiceById($treatment_id);
     if (!$treatment) {
         echo json_encode(['success' => false, 'message' => 'Nepostojeći tretman.']);
         exit;
     }
 
-    save_medical_note($pdo, $appointment_id, $vet_id, $note, $treatment_id, $treatment['price'], false);
+    $details = $ordinacija->getAppointmentById($appointment_id);
+    $pet_id = $details['pet_id'] ?? null;
+
+    $ordinacija->saveMedicalNote($appointment_id, $vet_id, $pet_id, $note, $treatment['name'], (float)$treatment['price'], false);
     echo json_encode(['success' => true]);
+    exit;
 }
+
+echo json_encode(['success' => false, 'message' => 'Pogrešan zahtev.']);

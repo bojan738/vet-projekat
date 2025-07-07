@@ -1,6 +1,8 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once 'auth.php';
+requireRegularUser();
+require_once 'db_config.php';
 require_once 'functions.php';
 
 $user_id = $_SESSION['user_id'] ?? null;
@@ -9,9 +11,11 @@ if (!$user_id) {
     exit;
 }
 
-$pets = get_pets_by_user($pdo, $user_id);
+$ordinacija = new VeterinarskaOrdinacija();
+
+$pets = $ordinacija->getPetsByUser1($user_id);
 $selectedPetId = $_GET['pet_id'] ?? '';
-$treatments = $selectedPetId ? get_treatments_by_pet($pdo, $selectedPetId) : [];
+$treatments = $selectedPetId ? $ordinacija->getTreatmentsByPet1($selectedPetId) : [];
 ?>
 
 <!DOCTYPE html>
@@ -38,6 +42,19 @@ $treatments = $selectedPetId ? get_treatments_by_pet($pdo, $selectedPetId) : [];
         .add-link:hover {
             background-color: #0056b3;
         }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #aaa;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
     </style>
 </head>
 <body>
@@ -55,49 +72,53 @@ $treatments = $selectedPetId ? get_treatments_by_pet($pdo, $selectedPetId) : [];
     </nav>
 </header>
 
-<h2>Informacije o tretmanima ljubimca</h2>
+<main class="container">
+    <h2>Informacije o tretmanima ljubimca</h2>
 
-<form method="GET" action="">
-    <label for="pet_id">Izaberi ljubimca:</label>
-    <select name="pet_id" id="pet_id" onchange="this.form.submit()">
-        <option value="">-- Izaberite ljubimca --</option>
-        <?php foreach ($pets as $pet): ?>
-            <option value="<?= $pet['id'] ?>" <?= $pet['id'] == $selectedPetId ? 'selected' : '' ?>>
-                <?= htmlspecialchars($pet['name']) ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-</form>
+    <form method="GET" action="">
+        <label for="pet_id" class="form-label">Izaberi ljubimca:</label>
+        <select name="pet_id" id="pet_id" onchange="this.form.submit()" class="form-input" style="width: 200px;">
+            <option value="">-- Izaberite ljubimca --</option>
+            <?php foreach ($pets as $pet): ?>
+                <option value="<?= $pet['id'] ?>" <?= $pet['id'] == $selectedPetId ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($pet['name']) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+    </form>
 
-<?php if ($selectedPetId && count($treatments) > 0): ?>
-    <table border="1" cellpadding="5" cellspacing="0">
-        <thead>
-        <tr>
-            <th>Datum tretmana</th>
-            <th>Vrsta tretmana</th>
-            <th>Veterinar</th>
-            <th>Status</th>
-            <th>Napomene</th>
-        </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($treatments as $t): ?>
+    <?php if ($selectedPetId && count($treatments) > 0): ?>
+        <table>
+            <thead>
             <tr>
-                <td><?= htmlspecialchars($t['appointment_date']) ?></td>
-                <td><?= htmlspecialchars($t['service_name']) ?></td>
-                <td><?= htmlspecialchars($t['vet_name']) ?></td>
-                <td><?= htmlspecialchars($t['status']) ?></td>
-                <td><?= htmlspecialchars($t['notes']) ?></td>
+                <th>Datum tretmana</th>
+                <th>Početak tretmana</th>
+                <th>Vrsta tretmana</th>
+                <th>Veterinar</th>
             </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-<?php elseif ($selectedPetId): ?>
-    <div class="no-treatments">
-        Ovaj ljubimac još nema nijedan tretman.<br>
-        <a href="users_reservation.php" class="add-link">➕ Zakazi termin</a>
+            </thead>
+            <tbody>
+            <?php foreach ($treatments as $t): ?>
+                <tr>
+                    <td><?= date('Y-m-d', strtotime($t['appointment_date'])) ?></td>
+                    <td><?= isset($t['start_time']) ? date('H:i', strtotime($t['start_time'])) : 'N/A' ?></td>
+                    <td><?= htmlspecialchars($t['service_name']) ?></td>
+                    <td><?= htmlspecialchars($t['vet_name']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php elseif ($selectedPetId): ?>
+        <div class="no-treatments">
+            Ovaj ljubimac još nema nijedan tretman.<br>
+            <a href="users_reservation.php" class="add-link">➕ Zakazi termin</a>
+        </div>
+    <?php endif; ?>
+</main>
+<footer class="custom-footer">
+    <div class="footer-content">
+        &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
     </div>
-<?php endif; ?>
-
+</footer>
 </body>
 </html>

@@ -1,33 +1,31 @@
 <?php
-require_once 'db.php';
+require_once 'db_config.php';
+require_once 'functions.php';
 require_once 'vendor/autoload.php';
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 $message = '';
+$ordinacija = new VeterinarskaOrdinacija();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email'])) {
-    $email = $_POST['email'];
-
-    $stmt = $pdo->prepare("SELECT id, first_name FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
+    $email = trim($_POST['email']);
+    $user = $ordinacija->getUserByEmail($email);
 
     if (!$user) {
-        $message = "Korisnik sa ovom e-mail adresom ne postoji.";
+        $message = "❌ Korisnik sa ovom e-mail adresom ne postoji.";
     } else {
-        $code = random_int(100000, 999999);
+        $code = strval(random_int(100000, 999999));
+        $ordinacija->storeResetCode($user['id'], $code);
 
-        $stmt = $pdo->prepare("INSERT INTO password_resets_codes (user_id, code, created_at) VALUES (?, ?, NOW())");
-        $stmt->execute([$user['id'], $code]);
-
-        $mail = new PHPMailer(true);
         try {
+            $mail = new PHPMailer(true);
             $mail->isSMTP();
             $mail->Host = 'sandbox.smtp.mailtrap.io';
             $mail->SMTPAuth = true;
-            $mail->Username = '1a8d7f596b2e99';
-            $mail->Password = 'ee70af4ea947bc';
+            $mail->Username = 'f9cd07efd4a868';
+            $mail->Password = 'f4d0acd5a04c9b';
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port = 2525;
 
@@ -36,17 +34,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email'])) {
 
             $mail->isHTML(true);
             $mail->Subject = "Kod za reset lozinke";
-            $mail->Body = "Vas kod za reset lozinke je: <strong>$code</strong>";
+            $mail->Body = "Zdravo " . htmlspecialchars($user['first_name']) . ",<br><br>" .
+                "Vas kod za reset lozinke je: <strong>$code</strong><br><br>" .
+                "Kod vazi 15 minuta.";
 
             $mail->send();
-
-            $message = "Kod je poslat na vašu e-mail adresu.";
+            $message = "✅ Kod za reset lozinke je poslat na vašu e-mail adresu.";
         } catch (Exception $e) {
             $message = "Greška pri slanju mejla: " . $mail->ErrorInfo;
         }
     }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html>
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email'])) {
         </form>
 
         <p class="register-link"><a href="password_new.php">Imate kod? Resetujte lozinku</a></p>
-        <p class="register-link"><a href="user_information.php">Nazad</a></p>
+        <p class="register-link"><a href="login.php">Nazad na prijavu</a></p>
     </section>
 </main>
 

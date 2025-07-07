@@ -1,16 +1,15 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireRegularUser();
+require_once 'db_config.php';
 require_once 'functions.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
+$message = '';
+$ordinacija = new VeterinarskaOrdinacija();
 
-$message = "";
-
-// Dohvatanje vrsta i grupa rasa povezanih po vrsti
-$breeds_by_type = get_breeds_grouped_by_type($pdo);
+$user_id = $_SESSION['user_id'];
+$breeds_by_type = $ordinacija->getBreedsGroupedByType();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = $_POST['pet_name'];
@@ -20,45 +19,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $gender = $_POST['gender'];
     $birth_date = $_POST['birth_date'];
 
-    // Validacija: starost i datum rođenja se moraju poklapati
-    $today = new DateTime();
     $birth = new DateTime($birth_date);
-    $interval = $birth->diff($today);
-    $calculated_age = $interval->y;
+    $today = new DateTime();
 
-    if ($calculated_age !== $age) {
-        $message = "⚠️ Starost i datum rođenja se ne poklapaju (računato: $calculated_age god.).";
+    if ($birth > $today) {
+        $message = "⚠️ Datum rođenja ne može biti u budućnosti.";
     } else {
-        // Upload slike
-        $image_path = '';
-        if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
-            $targetDir = "uploads/";
-            if (!is_dir($targetDir)) {
-                mkdir($targetDir, 0777, true);
+        $calculated_age = $birth->diff($today)->y;
+        if ($calculated_age !== $age) {
+            $message = "⚠️ Starost i datum rođenja se ne poklapaju (računato: $calculated_age god.).";
+        } else {
+            $image_path = null;
+            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $upload_dir = 'images/pets/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0755, true);
+                }
+                $filename = basename($_FILES['image']['name']);
+                $target_path = $upload_dir . $filename;
+                if (move_uploaded_file($_FILES['image']['tmp_name'], $target_path)) {
+                    $image_path = $filename;
+                }
             }
-            $image_path = $targetDir . time() . '_' . basename($_FILES['image']['name']);
-            move_uploaded_file($_FILES['image']['tmp_name'], $image_path);
+
+            // Inset pet type and pet breed
+
+            $type_id = $ordinacija->insertPetType($species);
+            $breed_id = $ordinacija->insertPetBreed($breed, $type_id);
+
+            $owner_id = $ordinacija->getOwnerIdByUserId($user_id);
+            if (!$owner_id) {
+                $owner_id = $ordinacija->create_owner_for_user($user_id);
+            }
+
+            // Input pet
+            $ordinacija->add_pet($owner_id, $name, $type_id, $age, $gender, $breed_id, $image_path, $birth_date);
+
+            header("Location: pet_information.php");
+            exit;
         }
-
-        // Ubacivanje vrste i rase u bazu ako ne postoje
-        $type_id = insert_pet_type($pdo, $species);
-        $breed_id = insert_pet_breed($pdo, $breed, $type_id);
-
-        // Dohvati owner_id ili ga napravi
-        $owner_id = get_owner_id_by_user_id($pdo, $_SESSION['user_id']);
-        if (!$owner_id) {
-            $stmt = $pdo->prepare("INSERT INTO pet_owners (user_id) VALUES (?)");
-            $stmt->execute([$_SESSION['user_id']]);
-            $owner_id = $pdo->lastInsertId();
-        }
-
-        // Dodaj ljubimca
-        add_pet($pdo, $owner_id, $name, $type_id, $age, $gender, $breed_id, $image_path, $birth_date);
-        $message = "✅ Ljubimac uspešno dodat!";
     }
 }
-
 ?>
+
+
 
 <!DOCTYPE html>
 <html>
@@ -119,16 +123,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <div class="form-group">
                 <label class="form-label">Datum rođenja</label>
-                <input type="date" name="birth_date" class="form-input" required>
+                <input type="date" name="birth_date" class="form-input" required max="<?= date('Y-m-d') ?>">
+
             </div>
 
             <div class="form-group">
                 <label class="form-label">Pol</label>
                 <select name="gender" class="form-input" required>
                     <option value="">-- Izaberi pol --</option>
-                    <option value="m">Mužjak</option>
-                    <option value="f">Ženka</option>
-                    <option value="n">Nepoznat</option>
+                    <option value="muski">Mužjak</option>
+                    <option value="zenski">Ženka</option>
+                    <option value="nepoznat">Nepoznat</option>
                 </select>
             </div>
 
@@ -146,25 +151,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <p>&copy; 2025 PetCare Ordinacija</p>
 </footer>
 
-<!-- Script za dinamičko filtriranje rasa po vrsti -->
-<script>
-    const breedsByType = <?= json_encode($breeds_by_type, JSON_UNESCAPED_UNICODE) ?>;
+<script id="breedsByTypeData" type="application/json"><?= json_encode($breeds_by_type, JSON_UNESCAPED_UNICODE) ?></script>
+<script src="js/pet_add.js"></script>
 
-    document.getElementById('speciesSelect').addEventListener('change', function () {
-        const selectedType = this.value;
-        const breedSelect = document.getElementById('breedSelect');
-        breedSelect.innerHTML = '<option value="">-- Izaberi rasu --</option>';
 
-        if (breedsByType[selectedType]) {
-            breedsByType[selectedType].forEach(breed => {
-                const option = document.createElement('option');
-                option.value = breed;
-                option.textContent = breed;
-                breedSelect.appendChild(option);
-            });
-        }
-    });
-</script>
 
 </body>
 </html>

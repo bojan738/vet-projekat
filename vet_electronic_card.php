@@ -1,6 +1,14 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireVeterinarian();
+require_once 'db_config.php';
 require_once 'functions.php';
+
+$pdo = (new DBConfig())->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
+
+
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
@@ -8,17 +16,22 @@ if (!isset($_SESSION['vet_id'])) {
 }
 
 $vetId = $_SESSION['vet_id'];
-$pets = get_all_pets($pdo); // Vraća sve ljubimce sa vlasnicima
 
-// Tvoj projekat je u podfolderu 'vet', zato i dodajemo /vet/ u URL
-$subfolder = '/vet';
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
+$pets = $ordinacija->getAllPets();
 
-// Putanja za prikaz u <img src=...>, relativno od root URL-a sajta
-$photoDirWeb = $subfolder . '/images/pets/';
-$defaultPhotoWeb = $subfolder . '/images/default.jpg';
+// Dinamički dohvataš podfolder gde se izvršava skripta (npr. /VetProjekat ili prazno ako je u root)
+$baseUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 
-// Fizička putanja do foldera sa slikama na serveru (disku)
-$photoDirPhysical = $_SERVER['DOCUMENT_ROOT'] . $subfolder . '/images/pets/';
+// Web putanje za prikaz slika
+$photoDirWeb = $baseUrl . '/images/pets/';
+$defaultPhotoWeb = $baseUrl . '/images/default.jpg';
+
+// Fizička putanja za proveru fajla
+$photoDirPhysical = __DIR__ . '/images/pets/';
+
 ?>
 
 <!DOCTYPE html>
@@ -28,10 +41,7 @@ $photoDirPhysical = $_SERVER['DOCUMENT_ROOT'] . $subfolder . '/images/pets/';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Elektronski kartoni</title>
 
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Glavni CSS -->
     <link rel="stylesheet" href="css/css.css" />
 </head>
 <body>
@@ -58,16 +68,11 @@ $photoDirPhysical = $_SERVER['DOCUMENT_ROOT'] . $subfolder . '/images/pets/';
                     <?php foreach ($pets as $pet): ?>
                         <?php
                         $photoFile = $pet['photo'] ?? '';
-
-                        // Puna fizička putanja do slike na serveru
                         $physicalPath = $photoDirPhysical . $photoFile;
 
-                        // Provera da li fajl postoji i da ime nije prazno
-                        if (!empty($photoFile) && file_exists($physicalPath)) {
-                            $imgSrc = $photoDirWeb . $photoFile;
-                        } else {
-                            $imgSrc = $defaultPhotoWeb;
-                        }
+                        $imgSrc = (!empty($photoFile) && file_exists($physicalPath))
+                            ? $photoDirWeb . $photoFile
+                            : $defaultPhotoWeb;
                         ?>
 
                         <div class="col-sm-6 col-md-4 col-lg-3">
@@ -97,7 +102,6 @@ $photoDirPhysical = $_SERVER['DOCUMENT_ROOT'] . $subfolder . '/images/pets/';
     </div>
 </footer>
 
-<!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

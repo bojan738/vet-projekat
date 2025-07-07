@@ -1,9 +1,11 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once 'db_config.php';
 require_once 'functions.php';
 
 $message = '';
+
+$ordinacija = new VeterinarskaOrdinacija();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $first = trim($_POST['first_name']);
@@ -14,18 +16,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'];
     $confirm = $_POST['confirm_password'];
 
-    if ($password !== $confirm) {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = "Email adresa nije validna.";
+    } elseif (!$address) {
+        $message = "Adresa je obavezna.";
+    } elseif ($phone !== '' && !preg_match('/^[0-9]+$/', $phone)) {
+        $message = "Broj telefona može sadržati samo cifre.";
+    } elseif ($password !== $confirm) {
         $message = "Lozinke se ne poklapaju.";
     } else {
-        $result = register_user($pdo, $first, $last, $email, $phone, $address, $password);
+        $result = $ordinacija->registerUser($first, $last, $email, $phone, $address, $password);
         if ($result === true) {
-            header("Location: login.php");
+            header("Location: login.php?registered=true");
             exit;
         } else {
             $message = $result;
         }
     }
 }
+
+
+
 ?>
 
 <!DOCTYPE html>
@@ -34,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <title>Registracija - PetCare</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/css.css">
 </head>
 <body>
@@ -73,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <label class="form-label">Potvrda lozinke</label>
             <input type="password" name="confirm_password" class="form-input" required>
-
+            <br><br>
             <button type="submit" class="cta-button">Registruj se</button>
 
             <p class="register-link">
@@ -81,16 +94,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </p>
         </form>
         <?php if (!empty($message)): ?>
-            <script>alert("<?= $message ?>");</script>
+            <script>alert("<?= htmlspecialchars($message) ?>");</script>
         <?php endif; ?>
     </section>
 </main>
 
-<footer class="custom-footer">
-    <div class="footer-content">
+<footer class="custom-footer" style="padding: 10px; text-align: center;">
+    <div class="footer-content" style="padding: 10px;">
         &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
     </div>
 </footer>
+<script src="js/registration_validation.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>

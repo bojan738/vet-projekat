@@ -1,37 +1,37 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireRegularUser();
+require_once 'db_config.php';
 require_once 'functions.php';
 
-if (!isset($_SESSION['user_id'])) {
+$ordinacija = new VeterinarskaOrdinacija();
+
+$user_id = $_SESSION['user_id'] ?? null;
+if (!$user_id) {
     header("Location: login.php");
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
-
-// Brisanje ljubimca
+// Delete pet
 if (isset($_GET['delete_pet_id']) && is_numeric($_GET['delete_pet_id'])) {
     $pet_id = (int)$_GET['delete_pet_id'];
 
-    if (pet_belongs_to_user($pdo, $pet_id, $user_id)) {
-        pet_delete($pdo, $pet_id);
+    if ($ordinacija->petBelongsToUser($pet_id, $user_id)) {
+        $ordinacija->petDelete($pet_id);
         $_SESSION['msg'] = "✅ Ljubimac obrisan.";
     } else {
         $_SESSION['msg'] = "⚠️ Nemate pravo da obrišete ovog ljubimca.";
     }
-
     header("Location: pet_information.php");
     exit;
 }
 
+// Load data
+$pets = $ordinacija->getPetsByOwner1($user_id);
+$breeds_by_type = $ordinacija->getBreedsGroupedByType();
 
-
-// Dohvatanje podataka
-$pets = get_pets_by_owner1($pdo, $user_id);
-$breeds_by_type = get_breeds_grouped_by_type($pdo);
-
-// Ažuriranje ljubimca
-// Ažuriranje ljubimca
+// Update pet
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
     $pet_id = $_POST['pet_id'];
     $name = $_POST['pet_name'];
@@ -41,7 +41,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
     $gender = $_POST['gender'];
     $breed_name = $_POST['breed'];
 
-    // Validacija starosti i datuma rođenja
     $today = new DateTime();
     $birth = new DateTime($birth_date);
     $interval = $birth->diff($today);
@@ -53,26 +52,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
         exit;
     }
 
+    // Images
     $image_path = null;
     if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
         $upload_dir = 'images/pets/';
         if (!is_dir($upload_dir)) {
             mkdir($upload_dir, 0755, true);
         }
-        $filename = time() . '_' . basename($_FILES['photo']['name']);
+        $filename = basename($_FILES['photo']['name']);
         $target_path = $upload_dir . $filename;
         if (move_uploaded_file($_FILES['photo']['tmp_name'], $target_path)) {
-            $image_path = $target_path;
+            $image_path = $filename;
         }
     }
 
-    update_pet($pdo, $pet_id, $name, $type_name, $age, $birth_date, $gender, $breed_name, $image_path);
+    $ordinacija->updatePet($pet_id, $name, $type_name, $age, $birth_date, $gender, $breed_name, $image_path);
     $_SESSION['msg'] = "✅ Ljubimac je uspešno ažuriran.";
     header("Location: pet_information.php");
     exit;
 }
-
 ?>
+
+
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -122,8 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
             align-items: center;
         }
         .pet-form-image {
-            max-width: 100%;
-            max-height: 300px;
+            width: 150px;
+            height: 150px;
             border-radius: 12px;
             object-fit: cover;
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
@@ -158,6 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
             font-weight: bold;
             cursor: pointer;
         }
+
     </style>
 </head>
 <body>
@@ -194,20 +196,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
     <?php else: ?>
         <div class="d-flex flex-wrap justify-content-center" id="petGallery">
             <?php foreach ($pets as $pet): ?>
-                <div class="pet-card" onclick="showPetForm(<?= $pet['id'] ?>)">
-                    <img src="<?= htmlspecialchars($pet['photo'] ?? 'images/default_pet.jpg') ?>" alt="Ljubimac">
+                <a href="medical_record.php?pet_id=<?= $pet['id'] ?>" class="pet-card" style="text-decoration:none; color:inherit;">
+                    <img src="Images/pets/<?= htmlspecialchars($pet['photo'] ?? 'default_pet.jpg') ?>" alt="Ljubimac" class="pet-form-image">
                     <p><strong><?= htmlspecialchars($pet['name']) ?></strong></p>
                     <small><?= htmlspecialchars($pet['type_name']) ?></small>
-                </div>
+                </a>
             <?php endforeach; ?>
         </div>
+
 
         <?php foreach ($pets as $pet): ?>
             <form method="POST" enctype="multipart/form-data" id="form-<?= $pet['id'] ?>" class="pet-form-horizontal hidden">
                 <input type="hidden" name="pet_id" value="<?= $pet['id'] ?>">
 
-                <div class="form-left">
-                    <img src="<?= htmlspecialchars($pet['photo'] ?? 'images/default_pet.jpg') ?>" alt="Slika ljubimca" class="pet-form-image">
+                <div class="form-left " >
+                    <img src="Images/pets/<?= htmlspecialchars($pet['photo'] ?? 'default_pet.jpg') ?>" alt="Ljubimac" class="pet-form-image">
+
+
                 </div>
 
                 <div class="form-right">
@@ -228,10 +233,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
 
                     <div class="form-group">
                         <label>Rasa</label>
-                        <select name="breed" class="breed-select" required>
+                        <select name="breed" class="form-input breed-select" required>
                             <option value="">-- Prvo izaberi vrstu --</option>
                         </select>
-                        <input type="hidden" value="<?= $pet['breed_name'] ?>" class="current-breed-value">
+                        <input type="hidden" class="current-breed-value" value="<?= htmlspecialchars($pet['breed_name']) ?>">
+
                     </div>
 
                     <div class="form-group">
@@ -247,11 +253,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
                     <div class="form-group">
                         <label>Pol</label>
                         <select name="gender" required>
-                            <option value="m" <?= $pet['gender'] == 'm' ? 'selected' : '' ?>>Mužjak</option>
-                            <option value="f" <?= $pet['gender'] == 'f' ? 'selected' : '' ?>>Ženka</option>
-                            <option value="n" <?= $pet['gender'] == 'n' ? 'selected' : '' ?>>Nepoznat</option>
+                            <option value="muski" <?= $pet['gender'] == 'muski' ? 'selected' : '' ?>>Mužjak</option>
+                            <option value="zenski" <?= $pet['gender'] == 'zenski' ? 'selected' : '' ?>>Ženka</option>
+                            <option value="nepoznat" <?= $pet['gender'] == 'nepoznat' ? 'selected' : '' ?>>Nepoznat</option>
                         </select>
                     </div>
+
 
                     <div class="form-group">
                         <label>Promeni sliku</label>
@@ -269,45 +276,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pet_id'])) {
     <?php endif; ?>
 </main>
 
+<footer class="custom-footer" style="padding: 10px; text-align: center;">
+    <div class="footer-content" style="padding: 10px;">
+        &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
+    </div>
+</footer>
 <script>
-    function showPetForm(petId) {
-        document.getElementById("petGallery").style.display = "none";
-        document.querySelectorAll('.pet-form-horizontal').forEach(f => f.classList.add('hidden'));
-        const form = document.getElementById('form-' + petId);
-        if (form) {
-            form.classList.remove('hidden');
-            window.scrollTo({ top: form.offsetTop - 60, behavior: 'smooth' });
-        }
-    }
-
-    function resetView() {
-        document.getElementById("petGallery").style.display = "flex";
-        document.querySelectorAll('.pet-form-horizontal').forEach(f => f.classList.add('hidden'));
-    }
-
-    function populateBreed(selectElement) {
-        const form = selectElement.closest("form");
-        const breedSelect = form.querySelector('.breed-select');
-        const selectedType = selectElement.value;
-        breedSelect.innerHTML = '<option value="">-- Izaberi rasu --</option>';
-        if (breedsByType[selectedType]) {
-            breedsByType[selectedType].forEach(breed => {
-                const option = document.createElement('option');
-                option.value = breed;
-                option.textContent = breed;
-                breedSelect.appendChild(option);
-            });
-            const current = form.querySelector('.current-breed-value')?.value;
-            if (current) {
-                [...breedSelect.options].forEach(opt => {
-                    if (opt.value === current) opt.selected = true;
-                });
-            }
-        }
-    }
-
-    document.querySelectorAll('.species-select').forEach(select => populateBreed(select));
+    window.breedsByType = <?= json_encode($breeds_by_type, JSON_UNESCAPED_UNICODE) ?>;
 </script>
+
+
+<script src="js/pet_information.js"></script>
+
+
 
 </body>
 </html>

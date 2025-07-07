@@ -1,18 +1,25 @@
 <?php
 session_start();
-require_once 'functions.php';
+require_once 'db_config.php';
+require_once 'VeterinarskaOrdinacija.php';
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
     exit;
 }
 
+$vet_id = $_SESSION['vet_id'];
 $record_id = (int)($_GET['id'] ?? 0);
 $appointment_id = (int)($_GET['appointment_id'] ?? 0);
-$vet_id = $_SESSION['vet_id'];
 
-$stmt = $pdo->prepare("DELETE FROM medical_records WHERE id = ? AND veterinarian_id = ?");
-$stmt->execute([$record_id, $vet_id]);
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
 
-header("Location: vet_treatments_details.php?appointment_id=" . $appointment_id);
+$record = $ordinacija->getMedicalRecordById($record_id, $vet_id);
+if ($record) {
+    $ordinacija->deleteMedicalNote($record_id);
+}
+
+header("Location: vet_treatments_details.php?appointment_id=$appointment_id");
 exit;

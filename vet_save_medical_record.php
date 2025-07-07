@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once 'db_config.php';
 require_once 'functions.php';
 
 if (!isset($_SESSION['vet_id'])) {
@@ -9,16 +10,18 @@ if (!isset($_SESSION['vet_id'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vet_id = $_SESSION['vet_id'];
-    $pet_id = (int)$_POST['pet_id'];
-    $diagnosis = trim($_POST['diagnosis']);
-    $treatment = trim($_POST['treatment']);
-    $price = floatval($_POST['price']);
+    $pet_id = (int)($_POST['pet_id'] ?? 0);
+    $diagnosis = trim($_POST['diagnosis'] ?? '');
+    $treatment = trim($_POST['treatment'] ?? '');
+    $price = floatval($_POST['price'] ?? 0);
 
-    $stmt = $pdo->prepare("
-        INSERT INTO medical_records (appointment_id, veterinarian_id, pet_id, diagnosis, treatment, price)
-        VALUES (NULL, ?, ?, ?, ?, ?)
-    ");
-    $stmt->execute([$vet_id, $pet_id, $diagnosis, $treatment, $price]);
+    if ($pet_id > 0 && $diagnosis && $treatment && $price >= 0) {
+        $db = new DBConfig();
+        $pdo = $db->getConnection();
+        $ordinacija = new VeterinarskaOrdinacija($pdo);
+
+        $ordinacija->saveMedicalRecord(null, $vet_id, $pet_id, $diagnosis, $treatment, $price);
+    }
 
     header("Location: vet_medical_record.php?pet_id=$pet_id");
     exit;

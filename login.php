@@ -1,31 +1,38 @@
 <?php
 session_start();
-require_once 'db.php';
+require_once 'db_config.php';
 require_once 'functions.php';
 
+$ordinacija = new VeterinarskaOrdinacija();
 $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['username']);  // Pretpostavlja se da forma koristi name="username"
+    $email = trim($_POST['username']);
     $password = $_POST['password'];
 
-    $role = login_user($pdo, $email, $password);
-
-    if ($role === 1) {
-        header("Location: admin_dashboard.php"); // ili admin.php, po tvojoj strukturi
-        exit;
-    } elseif ($role === 2 && isset($_SESSION['vet_id'])) {
-        header("Location: vet_profile.php");
-        exit;
-    } elseif ($role === 3) {
-        header("Location: pet_information.php");
-        exit;
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $message = "Molimo unesite validnu email adresu kao korisničko ime.";
     } else {
-        $message = "Pogrešan email ili lozinka ili nedozvoljena uloga.";
+        $role = $ordinacija->loginUser($email, $password);
+
+        if ($role === 'not_active') {
+            $message = "⚠️ Vaš nalog nije aktiviran. Proverite svoj e-mail i kliknite na aktivacioni link.";
+        } elseif ($role === 1) {
+            header("Location: manage_users.php");
+            exit;
+        } elseif ($role === 2 && isset($_SESSION['vet_id'])) {
+            header("Location: vet_profile.php");
+            exit;
+        } elseif ($role === 3) {
+            header("Location: pet_information.php");
+            exit;
+        } else {
+            $message = "Pogrešan email ili lozinka ili nedozvoljena uloga.";
+        }
     }
 }
-?>
 
+?>
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -66,9 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p class="register-link">
                 Nemate nalog? <a href="register.php">Registrujte se</a>
             </p>
+            <p class="register-link">
+                <a href="password_forgot.php">Zaboravljena lozinka</a>
+            </p>
         </form>
+
         <?php if (!empty($message)): ?>
-            <script>alert("<?= $message ?>");</script>
+            <script>alert("<?= htmlspecialchars($message) ?>");</script>
         <?php endif; ?>
     </section>
 </main>
@@ -78,6 +89,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         &copy; 2025 PetCare Ordinacija. Sva prava zadržana.
     </div>
 </footer>
+<script src="js/login_validation.js"></script>
+
 
 </body>
 </html>
+

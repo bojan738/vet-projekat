@@ -1,7 +1,9 @@
 <?php
 session_start();
+require_once 'auth.php';
+requireVeterinarian();
+require_once 'db_config.php';
 require_once 'functions.php';
-require_once 'db.php';
 
 if (!isset($_SESSION['vet_id'])) {
     header("Location: login.php");
@@ -12,27 +14,30 @@ $vet_id = $_SESSION['vet_id'];
 $record_id = (int)($_GET['id'] ?? 0);
 $appointment_id = (int)($_GET['appointment_id'] ?? 0);
 
-$treatments = get_all_treatments($pdo);
+$db = new DBConfig();
+$pdo = $db->getConnection();
+$ordinacija = new VeterinarskaOrdinacija($pdo);
 
-$record = get_medical_record_by_id($pdo, $record_id, $vet_id);
+$record = $ordinacija->getMedicalRecordById($record_id, $vet_id);
 if (!$record) {
     die("Nemate pravo pristupa ovoj belešci ili ne postoji.");
 }
+
+$treatments = $ordinacija->getAllTreatments();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $diagnosis = trim($_POST['diagnosis']);
     $treatment_id = (int)$_POST['treatment_id'];
 
-    $selected_treatment = get_service_by_id($pdo, $treatment_id);
+    $selected_treatment = $ordinacija->getServiceById($treatment_id);
+
     if ($diagnosis && $selected_treatment) {
-        update_medical_note(
-            $pdo,
+        $ordinacija->updateMedicalNote(
             $record_id,
             $diagnosis,
             $selected_treatment['name'],
             (float)$selected_treatment['price']
         );
-
         header("Location: vet_treatments_details.php?appointment_id=$appointment_id");
         exit;
     }
@@ -54,7 +59,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             min-height: 100vh;
             margin: 0;
         }
-
         .edit-container {
             width: 100%;
             max-width: 600px;
@@ -63,19 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
-
         h2 {
             text-align: center;
             color: #4caf50;
             margin-bottom: 25px;
         }
-
         label {
             display: block;
             margin-bottom: 6px;
             font-weight: bold;
         }
-
         textarea, select {
             width: 100%;
             padding: 10px;
@@ -84,7 +85,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 6px;
             font-size: 14px;
         }
-
         button {
             display: block;
             width: 100%;
@@ -96,7 +96,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight: bold;
             cursor: pointer;
         }
-
         button:hover {
             background-color: #45a049;
         }
@@ -113,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <select name="treatment_id" id="treatment_id" required>
             <option value="">-- Izaberite tretman --</option>
             <?php foreach ($treatments as $t): ?>
-                <option value="<?= $t['id'] ?>" <?= $t['name'] == $record['treatment'] ? 'selected' : '' ?>>
+                <option value="<?= $t['id'] ?>" <?= ($t['name'] == $record['treatment']) ? 'selected' : '' ?>>
                     <?= htmlspecialchars($t['name']) ?> (<?= number_format($t['price'], 2) ?> RSD)
                 </option>
             <?php endforeach; ?>
