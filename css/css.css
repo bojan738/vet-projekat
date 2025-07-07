@@ -1,4 +1,4 @@
-/* Osnovne postavke */
+
 html, body {
     height: 100%;
     margin: 0;
@@ -67,14 +67,12 @@ nav ul li a.active {
     border-radius: 12px;
 }
 
-/* Glavni sadržaj */
 main {
     flex: 1;
     padding: 40px 20px;
     text-align: center;
 }
 
-/* Hero sekcija */
 .hero {
     margin-bottom: 60px;
 }
@@ -104,7 +102,6 @@ main {
     background-color: #3e8e41;
 }
 
-/* Usluge */
 .services h2 {
     font-size: 2rem;
     margin-bottom: 20px;
@@ -120,16 +117,31 @@ main {
     margin: 10px 0;
 }
 
-/* Footer */
+
 
 footer {
-    background-color: #4caf50;
+    background-color: #4CAF50;
     color: white;
     text-align: center;
-    padding: 10px 0;
+}
+footer p {
+    margin: 0;
+    padding: 15px 0;
+}
+.custom-footer {
+    background-color: #4CAF50;
+    color: white;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 500;
+
 }
 
-/* Responsivnost */
+
+
 @media (max-width: 600px) {
     nav ul {
         flex-direction: column;
@@ -231,15 +243,35 @@ footer {
 }
 
 .vet-card {
-    background-color: white;
-    border: 1px solid #ccc;
-    border-radius: 12px;
-    padding: 20px;
-    width: 100%;
-    max-width: 300px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
+
+.vet-card img {
+    width: 120px !important;
+    height: 120px !important;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid #198754;
+    margin: 0 auto 15px;
+    display: block;
+}
+
+.vet-photo {
+    width: 120px !important;
+    height: 120px !important;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid #198754;
+    display: block;
+    margin: 0 auto 15px;
+    aspect-ratio: 1 / 1;
+}
+
+
+
 
 .vet-card:hover {
     transform: translateY(-5px);
@@ -255,8 +287,7 @@ footer {
     font-size: 15px;
     color: #555;
 }
-/*medical*/
-/* Stilovi za sekciju elektronskog kartona životinje */
+
 .animal-card-container {
     max-width: 600px;
     margin: 40px auto;
@@ -348,8 +379,8 @@ body {
     padding: 30px;
     box-shadow: 0 0 20px rgba(0,0,0,0.1);
     width: 100%;
-    max-width: 900px; /* Ograničava širinu */
-    margin: 40px auto; /* Automatske margine sa leve i desne strane = centriranje */
+    max-width: 900px;
+    margin: 40px auto;
 }
 
 table {
@@ -418,7 +449,7 @@ table td a:hover {
     text-decoration: underline;
 }
 
-/* Korisničke rezervacije */
+
 .reservations-wrapper {
     display: flex;
     justify-content: center;
@@ -504,13 +535,19 @@ table td a:hover {
 .hidden {
     display: none;
 }
-/*.pet-form {
-    margin: 20px auto;
-    padding: 20px;
-    width: 300px;
-    border: 1px solid #ccc;
-    border-radius: 10px;
-}*/
+
+.profile-photo {
+    max-width: 240px;
+    max-height: 220px;
+    width: auto;
+    height: auto;
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    display: block;
+}
+
+
 
 .pet-form-horizontal {
     display: flex;
@@ -596,4 +633,100 @@ table td a:hover {
     background-image: url('../images/side-bg.jpg');
     background-size: cover;
     background-position: center;
+}
+
+
+/*vet_schedule*/
+.vet-form-section {
+    max-width: 900px;
+    margin: 30px auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 25px 30px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+.vet-form-row {
+    display: flex;
+    gap: 20px;            /* razmak između polja */
+    align-items: flex-end; /* poravnanje labela i inputa */
+    justify-content: flex-start;
+    flex-wrap: nowrap;     /* sve u jednom redu */
+    margin-bottom: 20px;   /* razmak ispod reda */
+    max-width: 700px;      /* širina cele grupe */
+}
+
+.vet-form-group {
+    flex: 1;               /* svako polje zauzima jednak prostor */
+    min-width: 130px;      /* minimalna širina polja */
+    display: flex;
+    flex-direction: column;
+}
+
+.vet-form-label {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.vet-form-input {
+    padding: 8px 12px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+.vet-cta-button {
+    max-width: 700px;      /* isto kao i širina forme */
+    width: 100%;           /* dugme preko cele širine */
+    padding: 12px;
+    font-weight: bold;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.vet-cta-button:hover {
+    background-color: #45a049;
+}
+
+.vet-cta-button {
+    max-width: 700px;  /* može ostati ili skratiti ako želiš */
+    width: auto;       /* ne treba preko cele širine da se rastegne */
+    padding: 12px 30px;
+    font-weight: bold;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    display: block;           /* da se postavi u novi red */
+    margin-top: 10px;         /* razmak iznad dugmeta */
+}
+
+/* Ako želiš da dugme bude malo levo, ili centrirano, možeš dodati */
+.vet-schedule-form {
+    max-width: 700px;  /* ili koliko treba */
+    margin: 0 auto;
+}
+
+.vet-schedule-form > button {
+    display: block;
+    width: 100%;          /* dugme zauzima celu širinu forme */
+    max-width: 700px;     /* isto kao i širina dropdown reda */
+    padding: 12px 0;      /* možeš smanjiti horizontalni padding */
+    margin-top: 10px;
+    cursor: pointer;
+    box-sizing: border-box; /* da padding ne povećava širinu */
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .vet-form-row {
+        flex-direction: column;
+    }
 }
